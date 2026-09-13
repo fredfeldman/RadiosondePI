@@ -5,11 +5,15 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Optimization Flags
-if(CMAKE_BUILD_TYPE STREQUAL "Release" OR NOT CMAKE_BUILD_TYPE)
-    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+# Optimization & Compiler Flags
+if(MSVC)
+    add_compile_options(/EHsc /utf-8 /Zc:__cplusplus /permissive-)
+    if(CMAKE_BUILD_TYPE STREQUAL "Release" OR NOT CMAKE_BUILD_TYPE)
+        add_compile_options(/O2 /fp:fast)
+    endif()
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    if(CMAKE_BUILD_TYPE STREQUAL "Release" OR NOT CMAKE_BUILD_TYPE)
         add_compile_options(-O3 -ffast-math)
-        # Check for ARM NEON
         if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|armv7")
             add_compile_options(-march=native)
         endif()
@@ -17,10 +21,12 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release" OR NOT CMAKE_BUILD_TYPE)
 endif()
 
 # Dependencies
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(RTLSDR REQUIRED librtlsdr)
-pkg_check_modules(FFTW3 REQUIRED fftw3f)
-pkg_check_modules(SQLITE3 REQUIRED sqlite3)
+find_package(PkgConfig QUIET)
+if(PKG_CONFIG_FOUND)
+    pkg_check_modules(RTLSDR QUIET librtlsdr)
+    pkg_check_modules(FFTW3 QUIET fftw3f)
+    pkg_check_modules(SQLITE3 QUIET sqlite3)
+endif()
 find_package(Threads REQUIRED)
 
 # Include Directories
