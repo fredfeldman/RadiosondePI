@@ -26,6 +26,9 @@ fi
 CURRENT_USER="${SUDO_USER:-$USER}"
 CURRENT_GROUP=$(id -gn "$CURRENT_USER" 2>/dev/null || echo "$CURRENT_USER")
 
+# Ensure proper permissions on /opt/radiosondepi
+sudo chown -R "$CURRENT_USER:$CURRENT_GROUP" /opt/radiosondepi
+
 # Ensure user is in plugdev group for SDR access
 sudo usermod -aG plugdev "$CURRENT_USER" 2>/dev/null || true
 
@@ -43,6 +46,9 @@ WorkingDirectory=/opt/radiosondepi
 ExecStart=/opt/radiosondepi/bin/radiosondepi --config /etc/radiosondepi/config.json
 Restart=always
 RestartSec=5s
+TimeoutStopSec=5s
+KillSignal=SIGTERM
+SendSIGKILL=yes
 StandardOutput=journal
 StandardError=journal
 Nice=-10

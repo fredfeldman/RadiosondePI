@@ -33,6 +33,8 @@ sudo cp -r ../web/* /opt/radiosondepi/web/
 CURRENT_USER="${SUDO_USER:-$USER}"
 CURRENT_GROUP=$(id -gn "$CURRENT_USER" 2>/dev/null || echo "$CURRENT_USER")
 
+sudo chown -R "$CURRENT_USER:$CURRENT_GROUP" /opt/radiosondepi 2>/dev/null || true
+
 sudo tee /etc/systemd/system/radiosondepi.service > /dev/null << EOF
 [Unit]
 Description=RadiosondePI RTL-SDR Auto-Scanner & Telemetry Decoder Service
@@ -46,6 +48,9 @@ WorkingDirectory=/opt/radiosondepi
 ExecStart=/opt/radiosondepi/bin/radiosondepi --config /etc/radiosondepi/config.json
 Restart=always
 RestartSec=5s
+TimeoutStopSec=5s
+KillSignal=SIGTERM
+SendSIGKILL=yes
 StandardOutput=journal
 StandardError=journal
 Nice=-10

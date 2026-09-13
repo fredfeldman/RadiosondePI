@@ -146,7 +146,13 @@ public:
         m_running = false;
 
         if (m_serverSock != INVALID_SOCK) {
-            CLOSE_SOCK(m_serverSock);
+#if defined(_WIN32)
+            shutdown(m_serverSock, SD_BOTH);
+            closesocket(m_serverSock);
+#else
+            shutdown(m_serverSock, SHUT_RDWR);
+            close(m_serverSock);
+#endif
             m_serverSock = INVALID_SOCK;
         }
 
@@ -154,6 +160,11 @@ public:
         {
             std::lock_guard<std::mutex> lock(m_wsMutex);
             for (socket_t sock : m_wsClients) {
+#if defined(_WIN32)
+                shutdown(sock, SD_BOTH);
+#else
+                shutdown(sock, SHUT_RDWR);
+#endif
                 CLOSE_SOCK(sock);
             }
             m_wsClients.clear();
@@ -234,6 +245,29 @@ private:
 
     void serverLoop() {
         while (m_running) {
+            if (m_serverSock == INVALID_SOCK) break;
+
+            // Use select with timeout so accept() never hangs during service shutdown/restart
+            fd_set readFds;
+            FD_ZERO(&readFds);
+            FD_SET(m_serverSock, &readFds);
+
+            timeval tv{};
+            tv.tv_sec = 0;
+            tv.tv_usec = 250000; // 250ms polling timeout
+
+#if defined(_WIN32)
+            int activity = select(0, &readFds, nullptr, nullptr, &tv);
+#else
+            int activity = select(m_serverSock + 1, &readFds, nullptr, nullptr, &tv);
+#endif
+
+            if (!m_running) break;
+            if (activity <= 0) {
+                // Timeout elapsed or interrupted, check m_running and loop
+                continue;
+            }
+
             sockaddr_in clientAddr{};
 #if defined(_WIN32)
             int addrLen = sizeof(clientAddr);
