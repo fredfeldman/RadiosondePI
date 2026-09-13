@@ -245,12 +245,12 @@ sudo systemctl stop radiosondepi
 
 ## 8. Accessing the Live Web Dashboard & Map
 
-Once RadiosondePI is running, open a web browser on any device on the same local network (phone, tablet, or PC):
+Once RadiosondePI is running, open a web browser on any device on your local network (phone, tablet, or PC):
 
 ```
-http://<YOUR_RASPBERRY_PI_IP>:8080
+http://192.168.50.154:8080
 ```
-*(Example: `http://192.168.1.150:8080` or `http://raspberrypi.local:8080`)*
+*(Or `http://<YOUR_RASPBERRY_PI_IP>:8080` / `http://raspberrypi.local:8080`)*
 
 ### Features Available in the Web UI:
 - **Real-Time Live Map**: Tracks flight trajectories and coordinates on OpenStreetMap.
