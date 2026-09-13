@@ -29,7 +29,31 @@ sudo mkdir -p /opt/radiosondepi/bin /opt/radiosondepi/web
 sudo cp radiosondepi /opt/radiosondepi/bin/
 sudo cp -r ../web/* /opt/radiosondepi/web/
 
-# 6. Restart systemd service
+# 6. Update systemd service user if needed and restart
+CURRENT_USER="${SUDO_USER:-$USER}"
+CURRENT_GROUP=$(id -gn "$CURRENT_USER" 2>/dev/null || echo "$CURRENT_USER")
+
+sudo tee /etc/systemd/system/radiosondepi.service > /dev/null << EOF
+[Unit]
+Description=RadiosondePI RTL-SDR Auto-Scanner & Telemetry Decoder Service
+After=network.target
+
+[Service]
+Type=simple
+User=$CURRENT_USER
+Group=$CURRENT_GROUP
+WorkingDirectory=/opt/radiosondepi
+ExecStart=/opt/radiosondepi/bin/radiosondepi --config /etc/radiosondepi/config.json
+Restart=always
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+Nice=-10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
 echo "[SERVICE] Restarting radiosondepi.service..."
 sudo systemctl daemon-reload
 sudo systemctl restart radiosondepi.service

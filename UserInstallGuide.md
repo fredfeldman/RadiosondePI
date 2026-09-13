@@ -327,19 +327,29 @@ sudo systemctl status radiosondepi
 
 ## 11. Troubleshooting & FAQs
 
-### Q1: `rtlsdr_open() failed` or `No RTL-SDR devices found`
+### Q1: `(code=exited, status=217/USER)` when starting systemd service
+- **Cause**: The `radiosondepi.service` file hardcodes `User=pi`, but your Raspberry Pi user account is different (e.g. `fred`, `admin`, or custom setup on Debian Bookworm / Trixie).
+- **Fix**: Run `scripts/update.sh`, or update the service file with your actual username:
+  ```bash
+  sudo sed -i "s/^User=.*/User=$USER/" /etc/systemd/system/radiosondepi.service
+  sudo sed -i "s/^Group=.*/Group=$(id -gn)/" /etc/systemd/system/radiosondepi.service
+  sudo systemctl daemon-reload
+  sudo systemctl restart radiosondepi
+  ```
+
+### Q2: `rtlsdr_open() failed` or `No RTL-SDR devices found`
 - **Cause**: Kernel DVB driver was not unloaded or USB permissions are missing.
 - **Fix**: Run `echo "blacklist dvb_usb_rtl28xxu" | sudo tee /etc/modprobe.d/nortlsdr.conf`, unplug the dongle, and plug it back in.
 
-### Q2: High CPU usage on Raspberry Pi Zero 2W or Pi 3
+### Q3: High CPU usage on Raspberry Pi Zero 2W or Pi 3
 - **Cause**: Debug build running without optimization.
 - **Fix**: Ensure CMake was configured with `-DCMAKE_BUILD_TYPE=Release` to enable `-O3`, `-ffast-math`, and ARM NEON SIMD optimizations.
 
-### Q3: No sonde decoded even with strong signal visible on SDR# / GQRX
+### Q4: No sonde decoded even with strong signal visible on SDR# / GQRX
 - **Cause**: Frequency offset (PPM error) or tuner overload.
 - **Fix**:
   1. Determine your dongle's PPM offset using `rtl_test -p` and set `"ppm_error"` in `config.json`.
   2. Switch gain from `"auto"` to a fixed manual gain like `38.6` or `42.1` dB.
 
-### Q4: When are weather balloons typically launched?
+### Q5: When are weather balloons typically launched?
 - Synoptic meteorological radiosondes are routinely launched worldwide twice daily at **00:00 UTC** and **12:00 UTC** (typically released 45–60 minutes prior, around 23:15 UTC and 11:15 UTC).
