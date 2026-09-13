@@ -27,7 +27,7 @@ This guide walks you through setting up, configuring, and operating **Radiosonde
 | Item | Recommendation | Notes |
 | :--- | :--- | :--- |
 | **SBC (Single Board Computer)** | Raspberry Pi 4B, 5, 3B+, or Zero 2W | 64-bit OS recommended. |
-| **SDR Receiver** | RTL-SDR Blog v3 / v4, Nooelec NESDR, or generic RTL2832U | SMA connector preferred. |
+| **SDR Receiver** | **SDRplay RSPdx-R2 / RSPdx / RSPduo / RSP1A** or **RTL-SDR v3 / v4** | RSPdx-R2 provides 14-bit ADC, multi-antenna switching (A/B/C), and notch filters. |
 | **Antenna** | 400–406 MHz tuned dipole, ground plane, or turnstile | Vertically polarized for standard radiosonde signals. |
 | **Power Supply** | Official 5V 3A (Pi 4) / 5V 5A (Pi 5) / 5V 2.5A (Pi 3/Zero 2W) | Stable power prevents SDR USB dropouts. |
 | **Optional Filter/LNA** | 403 MHz SAW Bandpass Filter + LNA (Bias-T powered) | Recommended in urban areas with high LTE/PMR interference. |
@@ -85,17 +85,16 @@ ctest --output-on-failure
 
 ---
 
-## 5. RTL-SDR Driver & Permissions Setup
+## 5. SDR Driver & Permissions Setup
 
+### A. RTL-SDR Setup
 By default, Linux loads the kernel module `dvb_usb_rtl28xxu` (DVB-T TV tuner driver) when an RTL-SDR dongle is plugged in. This must be blacklisted so `librtlsdr` can access raw I/Q samples in user space.
 
-### Step 5.1: Blacklist the Kernel DVB Module
 ```bash
+# 1. Blacklist the Kernel DVB Module
 echo "blacklist dvb_usb_rtl28xxu" | sudo tee /etc/modprobe.d/nortlsdr.conf
-```
 
-### Step 5.2: Configure Udev Rules (Non-root USB Access)
-```bash
+# 2. Configure Udev Rules (Non-root USB Access)
 sudo tee /etc/udev/rules.d/20-rtlsdr.rules << 'EOF'
 SUBSYSTEMS=="usb", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="2838", MODE:="0666"
 SUBSYSTEMS=="usb", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="2832", MODE:="0666"
@@ -105,20 +104,27 @@ sudo udevadm control --reload-rules
 sudo udevadm trigger
 ```
 
-### Step 5.3: Verify SDR Recognition
-Unplug and re-plug your RTL-SDR dongle, then run:
+---
+
+### B. SDRplay RSPdx-R2 / RSP Series Setup
+SDRplay devices utilize the **SDRplay API v3** service (`sdrplay_api_service`).
+
 ```bash
-rtl_test -t
+# 1. Download SDRplay API v3 installer for ARM64 (Raspberry Pi OS 64-bit)
+wget https://www.sdrplay.com/software/SDRplay_RSP_API-ARM64-3.15.2.run
+
+# 2. Make executable and run the installer
+chmod +x SDRplay_RSP_API-ARM64-3.15.2.run
+./SDRplay_RSP_API-ARM64-3.15.2.run
+
+# 3. Start and enable the SDRplay service
+sudo systemctl daemon-reload
+sudo systemctl enable sdrplay
+sudo systemctl start sdrplay
+
+# 4. Check that the service is active and detecting your RSPdx-R2
+sudo systemctl status sdrplay
 ```
-You should see output similar to:
-```
-Found 1 device(s):
-  0:  Realtek, RTL2838UHIDIR, SN: 00000001
-Using device 0: Generic RTL2832U OEM
-Found Rafael Micro R820T tuner
-Supported gain values (29): 0.0 0.9 1.4 ... 49.6 dB
-```
-*(Press `Ctrl+C` to exit the test).*
 
 ---
 
@@ -129,11 +135,22 @@ Create or edit your runtime configuration file (default location: `/etc/radioson
 ```json
 {
   "sdr": {
+    "driver": "sdrplay",
     "device_index": 0,
+    "frequency_hz": 403000000,
     "sample_rate": 2400000,
     "ppm_error": 0,
     "gain": "auto",
-    "bias_tee": false
+    "bias_tee": false,
+    "antenna_port": "AntennaA",
+    "lna_state": 0,
+    "broadcast_notch": false,
+    "dab_notch": false
+  },
+  "diversity": {
+    "enabled": false,
+    "mode": "MaximalRatioCombining",
+    "secondary_device_index": 1
   },
   "scanner": {
     "enabled": true,
@@ -183,6 +200,18 @@ Create or edit your runtime configuration file (default location: `/etc/radioson
 ```
 
 ### Key Parameter Explanations:
+* `sdr.driver`: Set to `"sdrplay"` (for RSPdx-R2 / RSPdx / RSPduo / RSP1A), `"rtlsdr"`, or `"auto"`.
+* `sdr.antenna_port`: For RSPdx-R2, choose `"AntennaA"`, `"AntennaB"`, or `"AntennaC"` (BNC 50Ω ports).
+* `sdr.lna_state`: LNA reduction state ($0 = \text{maximum LNA gain}$, higher integer = reduced gain for strong signals).
+* `sdr.broadcast_notch`: Set to `true` to activate the built-in FM broadcast notch filter ($88\text{--}108\text{ MHz}$).
+* `sdr.gain`: Set to `"auto"` or a manual gain value in tenths of a dB (e.g., `421` for $42.1\text{ dB}$).
+* `sdr.ppm_error`: Frequency oscillator offset in PPM (TCXO on RSPdx-R2 has $<0.5\text{ PPM}$ drift).
+* `sdr.bias_tee`: Set to `true` if powering an external 403 MHz LNA through the antenna port.
+  }
+}
+```
+
+### Key Parameter Explanations:
 * `sdr.gain`: Set to `"auto"` or a manual gain value in tenths of a dB (e.g., `421` for $42.1\text{ dB}$).
 * `sdr.ppm_error`: Frequency oscillator offset in PPM (usually $0$ to $+2$ on genuine RTL-SDR v3/v4).
 * `sdr.bias_tee`: Set to `true` if powering an active LNA directly through the coax cable.
@@ -197,11 +226,14 @@ Create or edit your runtime configuration file (default location: `/etc/radioson
 
 To start RadiosondePI in the foreground for debugging or field chasing:
 ```bash
-# Tune to a specific frequency manually (e.g. 403.000 MHz):
-./build/radiosondepi --freq 403000000 --config config/config.example.json
+# Using SDRplay RSPdx-R2 on Antenna Port A:
+./build/radiosondepi --driver sdrplay --antenna AntennaA --freq 404800000
+
+# Using RTL-SDR tuned to 404.8 MHz:
+./build/radiosondepi --driver rtlsdr --freq 404800000 --config config/config.example.json
 
 # Or run with auto-scanner enabled:
-./build/radiosondepi --config config/config.example.json
+./build/radiosondepi --scan --config config/config.example.json
 ```
 
 **Live Terminal Output Example:**
@@ -209,11 +241,15 @@ To start RadiosondePI in the foreground for debugging or field chasing:
 =================================================
  RadiosondePI - RTL-SDR Radiosonde Core (v0.1.0) 
 =================================================
-[CONFIG] Target Frequency: 403.000 MHz
-[SDR] Successfully initialized RTL-SDR device.
-[DSP] Pipeline running. Press Ctrl+C to terminate.
+[CONFIG] Tuned Frequency: 404.800 MHz | Driver: sdrplay | Antenna: AntennaA
+[SDRplay] Connected to SDRplay Service (API v3.15)
+[SDRplay] Initialized SDRplay RSPdx-R2 on AntennaA @ 404.800 MHz
+[DSP] Zero-allocation multi-protocol pipeline running. Press Ctrl+C to terminate.
 
->>> [RS41 DETECTED] Frame #1420 | Serial: V3421882 <<<
+>>> [RS41 LOCKED @ 404.800 MHz] Frame #1420 | Serial: V3421882 <<<
+    Position: 52.12481, -0.45192 | Alt: 18452.1 m | Climb: 5.4 m/s | Speed: 42.1 km/h | Heading: 84 deg
+    Temp: -48.20 C | RH: 8.5 % | Battery: 2.94 V
+```
     Position: 52.12481, -0.45192 | Alt: 18452.1 m | Climb: 5.4 m/s | Speed: 42.1 km/h | Heading: 84 deg
     Temp: -48.20 C | RH: 8.5 % | Battery: 2.94 V
 ```

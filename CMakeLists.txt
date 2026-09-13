@@ -50,6 +50,13 @@ if(NOT SQLITE3_LIBRARIES)
     endif()
 endif()
 
+# SDRplay API v3 Library search
+find_library(SDRPLAY_LIB NAMES sdrplay_api libsdrplay_api PATHS /usr/local/lib /usr/lib)
+if(SDRPLAY_LIB)
+    set(SDRPLAY_LIBRARIES ${SDRPLAY_LIB})
+    message(STATUS "Found SDRplay API Library: ${SDRPLAY_LIB}")
+endif()
+
 find_package(Threads REQUIRED)
 
 # Include Directories
@@ -58,6 +65,7 @@ include_directories(
     ${RTLSDR_INCLUDE_DIRS}
     ${FFTW3_INCLUDE_DIRS}
     ${SQLITE3_INCLUDE_DIRS}
+    /usr/local/include
 )
 
 # Source Files
@@ -70,13 +78,14 @@ add_executable(radiosondepi ${SRC_FILES})
 
 target_link_libraries(radiosondepi PRIVATE
     ${RTLSDR_LIBRARIES}
+    ${SDRPLAY_LIBRARIES}
     ${FFTW3_LIBRARIES}
     ${SQLITE3_LIBRARIES}
     Threads::Threads
 )
 
 if(UNIX AND NOT APPLE)
-    target_link_libraries(radiosondepi PRIVATE m)
+    target_link_libraries(radiosondepi PRIVATE m dl)
 endif()
 
 if(WIN32)
@@ -88,16 +97,18 @@ add_executable(test_sprint1
     tests/test_sprint1.cpp
     src/decoders/RS41Decoder.cpp
     src/sdr/RtlSdrDevice.cpp
+    src/sdr/SdrplayDevice.cpp
 )
 
 target_link_libraries(test_sprint1 PRIVATE
     ${RTLSDR_LIBRARIES}
+    ${SDRPLAY_LIBRARIES}
     ${FFTW3_LIBRARIES}
     Threads::Threads
 )
 
 if(UNIX AND NOT APPLE)
-    target_link_libraries(test_sprint1 PRIVATE m)
+    target_link_libraries(test_sprint1 PRIVATE m dl)
 endif()
 
 if(WIN32)

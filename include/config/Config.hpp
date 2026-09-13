@@ -98,10 +98,15 @@ struct AppConfig {
         std::string json = buffer.str();
 
         // 1. SDR Section
+        sdr.driver = extractString(json, "driver", "auto");
         sdr.deviceIndex = extractInt(json, "device_index", 0);
         sdr.sampleRate = static_cast<uint32_t>(extractDouble(json, "sample_rate", 2400000));
         sdr.ppmCorrection = extractInt(json, "ppm_error", 0);
         sdr.biasTee = extractBool(json, "bias_tee", false);
+        sdr.antennaPort = extractString(json, "antenna_port", "AntennaA");
+        sdr.lnaState = extractInt(json, "lna_state", 0);
+        sdr.broadcastNotch = extractBool(json, "broadcast_notch", false);
+        sdr.dabNotch = extractBool(json, "dab_notch", false);
 
         double freq = extractDouble(json, "frequency_hz", 0.0);
         if (freq > 1e6) {

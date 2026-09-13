@@ -81,11 +81,17 @@ int main(int argc, char* argv[]) {
         } else if ((arg == "--gain" || arg == "-g") && i + 1 < argc) {
             std::string gStr = argv[++i];
             appConfig.sdr.gain = (gStr == "auto") ? 0 : static_cast<int>(std::stof(gStr) * 10.0f);
+        } else if ((arg == "--driver" || arg == "-D") && i + 1 < argc) {
+            appConfig.sdr.driver = argv[++i];
+        } else if ((arg == "--antenna" || arg == "-A") && i + 1 < argc) {
+            appConfig.sdr.antennaPort = argv[++i];
         }
     }
 
     std::cout << "[CONFIG] Tuned Frequency: " << std::fixed << std::setprecision(3) 
               << (frequencyHz / 1e6) << " MHz" 
+              << " | Driver: " << appConfig.sdr.driver
+              << " | Antenna: " << appConfig.sdr.antennaPort
               << " | AutoScan: " << (autoScan ? "ENABLED" : "DISABLED")
               << " | Gain: " << (appConfig.sdr.gain == 0 ? "AUTO" : std::to_string(appConfig.sdr.gain / 10.0f) + " dB")
               << std::endl;

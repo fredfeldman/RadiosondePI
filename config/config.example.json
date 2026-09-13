@@ -1,10 +1,16 @@
 {
   "sdr": {
+    "driver": "auto",
     "device_index": 0,
+    "frequency_hz": 403000000,
     "sample_rate": 2400000,
     "ppm_error": 0,
     "gain": "auto",
-    "bias_tee": false
+    "bias_tee": false,
+    "antenna_port": "AntennaA",
+    "lna_state": 0,
+    "broadcast_notch": false,
+    "dab_notch": false
   },
   "diversity": {
     "enabled": false,

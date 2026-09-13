@@ -8,6 +8,9 @@
 #include "dsp/SymbolSync.hpp"
 #include "decoders/RS41Decoder.hpp"
 #include "dsp/RingBuffer.hpp"
+#include "sdr/RtlSdrDevice.hpp"
+#include "sdr/SdrplayDevice.hpp"
+#include "sdr/DiversityReceiver.hpp"
 
 void testRingBuffer() {
     RadiosondePI::DSP::RingBuffer<int> rb(8);
@@ -84,6 +87,32 @@ void testZeroAllocFirAndDemod() {
     std::cout << "[TEST PASSED] Zero-allocation decimation and demodulation buffer pipeline." << std::endl;
 }
 
+void testSdrplayDevice() {
+    RadiosondePI::SDR::SdrConfig rspConfig{};
+    rspConfig.driver = "sdrplay";
+    rspConfig.frequencyHz = 404800000;
+    rspConfig.sampleRate = 2400000;
+    rspConfig.antennaPort = "AntennaB";
+    rspConfig.broadcastNotch = true;
+
+    auto dev = RadiosondePI::SDR::createSdrDevice(rspConfig);
+    assert(dev != nullptr);
+    assert(dev->getDriverType() == RadiosondePI::SDR::SdrDriverType::SdrplayRSP ||
+           dev->getDriverType() == RadiosondePI::SDR::SdrDriverType::Simulation);
+
+    bool opened = dev->open(rspConfig);
+    assert(opened);
+    assert(dev->isOpen());
+
+    dev->setFrequency(404800000);
+    assert(dev->getConfig().frequencyHz == 404800000);
+
+    dev->close();
+    assert(!dev->isRunning());
+
+    std::cout << "[TEST PASSED] SDRplay RSPdx-R2 device driver lifecycle & configuration." << std::endl;
+}
+
 int main() {
     std::cout << "--- Running Sprint 1 DSP & Decoder Tests ---" << std::endl;
     testRingBuffer();
@@ -91,6 +120,7 @@ int main() {
     testFmDiscriminator();
     testReedSolomonFec();
     testZeroAllocFirAndDemod();
+    testSdrplayDevice();
     std::cout << "--- All Sprint 1 Tests Passed ---" << std::endl;
     return 0;
 }

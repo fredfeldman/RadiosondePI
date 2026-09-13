@@ -1,11 +1,14 @@
 #pragma once
 
+#include "sdr/ISdrDevice.hpp"
 #include "sdr/RtlSdrDevice.hpp"
+#include "sdr/SdrplayDevice.hpp"
 #include "dsp/DiversityCombiner.hpp"
 #include <vector>
 #include <memory>
 #include <functional>
 #include <mutex>
+#include <algorithm>
 
 namespace RadiosondePI::SDR {
 
@@ -14,6 +17,16 @@ struct DiversityConfig {
     DSP::DiversityMode mode{DSP::DiversityMode::MaximalRatioCombining};
     std::vector<SdrConfig> dongleConfigs;
 };
+
+inline std::unique_ptr<ISdrDevice> createSdrDevice(const SdrConfig& config) {
+    std::string driver = config.driver;
+    std::transform(driver.begin(), driver.end(), driver.begin(), ::tolower);
+
+    if (driver == "sdrplay" || driver == "rspdx" || driver == "rsp" || driver == "rspdx-r2" || driver == "sdrplayrsp") {
+        return std::make_unique<SdrplayDevice>();
+    }
+    return std::make_unique<RtlSdrDevice>();
+}
 
 class DiversityReceiver {
 public:
@@ -31,13 +44,17 @@ public:
         if (m_config.dongleConfigs.empty()) {
             // Default to single device
             SdrConfig defaultCfg{};
-            m_devices.push_back(std::make_unique<RtlSdrDevice>());
-            return m_devices.back()->open(defaultCfg);
+            auto dev = createSdrDevice(defaultCfg);
+            if (dev->open(defaultCfg)) {
+                m_devices.push_back(std::move(dev));
+                return true;
+            }
+            return false;
         }
 
         bool anySuccess = false;
         for (const auto& cfg : m_config.dongleConfigs) {
-            auto dev = std::make_unique<RtlSdrDevice>();
+            auto dev = createSdrDevice(cfg);
             if (dev->open(cfg)) {
                 m_devices.push_back(std::move(dev));
                 anySuccess = true;
@@ -139,7 +156,7 @@ private:
 
     DiversityConfig m_config;
     DSP::DiversityCombiner m_combiner;
-    std::vector<std::unique_ptr<RtlSdrDevice>> m_devices;
+    std::vector<std::unique_ptr<ISdrDevice>> m_devices;
     CombinedCallback m_callback;
 
     std::mutex m_mutex;

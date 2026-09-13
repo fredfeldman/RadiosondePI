@@ -1,5 +1,6 @@
 #pragma once
 
+#include "sdr/ISdrDevice.hpp"
 #include "dsp/RingBuffer.hpp"
 #include <cstdint>
 #include <string>
@@ -13,38 +14,29 @@ struct rtlsdr_dev;
 
 namespace RadiosondePI::SDR {
 
-using Complex32 = std::complex<float>;
-
-struct SdrConfig {
-    int deviceIndex{0};
-    uint32_t frequencyHz{403000000};
-    uint32_t sampleRate{2400000};
-    int gain{0}; // 0 = auto
-    int ppmCorrection{0};
-    bool biasTee{false};
-};
-
-class RtlSdrDevice {
+class RtlSdrDevice : public ISdrDevice {
 public:
-    using SampleBlockCallback = std::function<void(const Complex32* samples, size_t count)>;
-
     explicit RtlSdrDevice(size_t ringBufferCapacity = 1048576);
-    ~RtlSdrDevice();
+    ~RtlSdrDevice() override;
 
-    bool open(const SdrConfig& config);
-    void close();
+    bool open(const SdrConfig& config) override;
+    void close() override;
 
-    bool setFrequency(uint32_t frequencyHz);
-    bool setSampleRate(uint32_t sampleRate);
-    bool setGain(int gainTenthsDb); // e.g. 297 for 29.7 dB, 0 for auto
-    bool setBiasTee(bool enable);
+    bool setFrequency(uint32_t frequencyHz) override;
+    bool setSampleRate(uint32_t sampleRate) override;
+    bool setGain(int gainTenthsDb) override; // e.g. 297 for 29.7 dB, 0 for auto
+    bool setBiasTee(bool enable) override;
 
-    bool startAsync(SampleBlockCallback callback);
-    void stopAsync();
+    bool startAsync(SampleBlockCallback callback) override;
+    void stopAsync() override;
 
-    [[nodiscard]] bool isOpen() const { return m_dev != nullptr || m_isSimulation; }
-    [[nodiscard]] bool isRunning() const { return m_running; }
-    [[nodiscard]] const SdrConfig& getConfig() const { return m_config; }
+    [[nodiscard]] bool isOpen() const override { return m_dev != nullptr || m_isSimulation; }
+    [[nodiscard]] bool isRunning() const override { return m_running; }
+    [[nodiscard]] const SdrConfig& getConfig() const override { return m_config; }
+    [[nodiscard]] std::string getDeviceName() const override { return m_deviceName; }
+    [[nodiscard]] SdrDriverType getDriverType() const override {
+        return m_isSimulation ? SdrDriverType::Simulation : SdrDriverType::RtlSdr;
+    }
 
 private:
     static void rtlsdrCallback(unsigned char* buf, uint32_t len, void* ctx);
@@ -53,6 +45,7 @@ private:
 
     rtlsdr_dev* m_dev{nullptr};
     SdrConfig m_config;
+    std::string m_deviceName{"Generic RTL2832U"};
     std::atomic<bool> m_running{false};
     std::thread m_workerThread;
     SampleBlockCallback m_callback;
