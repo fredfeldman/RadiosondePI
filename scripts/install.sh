@@ -5,7 +5,7 @@ echo "=== Installing RadiosondePI on Raspberry Pi ==="
 
 # 1. Install dependencies
 sudo apt-get update
-sudo apt-get install -y cmake g++ librtlsdr-dev libfftw3-dev libsqlite3-dev libssl-dev rtl-sdr
+sudo apt-get install -y cmake g++ librtlsdr-dev libbladerf-dev bladerf libfftw3-dev libsqlite3-dev libssl-dev rtl-sdr
 
 # 2. Blacklist default DVB-T driver for RTL-SDR
 echo "blacklist dvb_usb_rtl28xxu" | sudo tee /etc/modprobe.d/nortlsdr.conf

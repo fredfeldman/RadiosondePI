@@ -3,6 +3,7 @@
 #include "sdr/ISdrDevice.hpp"
 #include "sdr/RtlSdrDevice.hpp"
 #include "sdr/SdrplayDevice.hpp"
+#include "sdr/BladeRfDevice.hpp"
 #include "dsp/DiversityCombiner.hpp"
 #include <vector>
 #include <memory>
@@ -24,6 +25,9 @@ inline std::unique_ptr<ISdrDevice> createSdrDevice(const SdrConfig& config) {
 
     if (driver == "sdrplay" || driver == "rspdx" || driver == "rsp" || driver == "rspdx-r2" || driver == "sdrplayrsp") {
         return std::make_unique<SdrplayDevice>();
+    }
+    if (driver == "bladerf" || driver == "blade_rf" || driver == "nuand") {
+        return std::make_unique<BladeRfDevice>();
     }
     return std::make_unique<RtlSdrDevice>();
 }

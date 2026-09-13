@@ -57,6 +57,13 @@ if(SDRPLAY_LIB)
     message(STATUS "Found SDRplay API Library: ${SDRPLAY_LIB}")
 endif()
 
+# Nuand bladeRF Library search
+find_library(BLADERF_LIB NAMES bladeRF libbladeRF PATHS /usr/local/lib /usr/lib)
+if(BLADERF_LIB)
+    set(BLADERF_LIBRARIES ${BLADERF_LIB})
+    message(STATUS "Found bladeRF Library: ${BLADERF_LIB}")
+endif()
+
 find_package(Threads REQUIRED)
 
 # Include Directories
@@ -79,6 +86,7 @@ add_executable(radiosondepi ${SRC_FILES})
 target_link_libraries(radiosondepi PRIVATE
     ${RTLSDR_LIBRARIES}
     ${SDRPLAY_LIBRARIES}
+    ${BLADERF_LIBRARIES}
     ${FFTW3_LIBRARIES}
     ${SQLITE3_LIBRARIES}
     Threads::Threads
@@ -98,11 +106,13 @@ add_executable(test_sprint1
     src/decoders/RS41Decoder.cpp
     src/sdr/RtlSdrDevice.cpp
     src/sdr/SdrplayDevice.cpp
+    src/sdr/BladeRfDevice.cpp
 )
 
 target_link_libraries(test_sprint1 PRIVATE
     ${RTLSDR_LIBRARIES}
     ${SDRPLAY_LIBRARIES}
+    ${BLADERF_LIBRARIES}
     ${FFTW3_LIBRARIES}
     Threads::Threads
 )

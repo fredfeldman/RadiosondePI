@@ -113,6 +113,34 @@ void testSdrplayDevice() {
     std::cout << "[TEST PASSED] SDRplay RSPdx-R2 device driver lifecycle & configuration." << std::endl;
 }
 
+void testBladeRfDevice() {
+    RadiosondePI::SDR::SdrConfig bladeConfig{};
+    bladeConfig.driver = "bladerf";
+    bladeConfig.frequencyHz = 404800000;
+    bladeConfig.sampleRate = 2400000;
+    bladeConfig.rxChannel = 0;
+    bladeConfig.bandwidthHz = 1500000;
+    bladeConfig.gainMode = "manual";
+    bladeConfig.gain = 300; // 30 dB
+
+    auto dev = RadiosondePI::SDR::createSdrDevice(bladeConfig);
+    assert(dev != nullptr);
+    assert(dev->getDriverType() == RadiosondePI::SDR::SdrDriverType::BladeRF ||
+           dev->getDriverType() == RadiosondePI::SDR::SdrDriverType::Simulation);
+
+    bool opened = dev->open(bladeConfig);
+    assert(opened);
+    assert(dev->isOpen());
+
+    dev->setFrequency(404800000);
+    assert(dev->getConfig().frequencyHz == 404800000);
+
+    dev->close();
+    assert(!dev->isRunning());
+
+    std::cout << "[TEST PASSED] Nuand bladeRF device driver lifecycle & configuration." << std::endl;
+}
+
 int main() {
     std::cout << "--- Running Sprint 1 DSP & Decoder Tests ---" << std::endl;
     testRingBuffer();
@@ -121,6 +149,7 @@ int main() {
     testReedSolomonFec();
     testZeroAllocFirAndDemod();
     testSdrplayDevice();
+    testBladeRfDevice();
     std::cout << "--- All Sprint 1 Tests Passed ---" << std::endl;
     return 0;
 }

@@ -9,6 +9,7 @@ A high-performance, native Raspberry Pi Radiosonde Auto-Scanner and Telemetry De
 - **Native C++20 DSP Core**: Low CPU footprint ($<20\%$ on Raspberry Pi 4, $<35\%$ on Pi Zero 2W) with ARM NEON SIMD acceleration.
 - **Multi-Hardware SDR Receiver Support**:
   - **SDRplay RSPdx-R2 / RSPdx / RSPduo / RSP1A / RSP2** via SDRplay API v3 (14-bit ADC, Antenna A/B/C port selection, LNA control, FM/DAB notch filters).
+  - **Nuand bladeRF (bladeRF 2.0 micro xA4/xA9 & bladeRF Classic)** via `libbladeRF` (SC16_Q11 streaming, RX1/RX2 channel selection, hardware AGC).
   - **RTL-SDR v3 / v4 / generic RTL2832U** via `librtlsdr`.
   - **Multi-Dongle Diversity Reception** (Maximal Ratio Combining, Equal Gain Combining, Selection Combining).
 - **Multi-Sonde Protocol Support**:

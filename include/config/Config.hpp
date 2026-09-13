@@ -108,6 +108,11 @@ struct AppConfig {
         sdr.broadcastNotch = extractBool(json, "broadcast_notch", false);
         sdr.dabNotch = extractBool(json, "dab_notch", false);
 
+        // bladeRF settings
+        sdr.rxChannel = extractInt(json, "rx_channel", 0);
+        sdr.bandwidthHz = static_cast<uint32_t>(extractDouble(json, "bandwidth_hz", 1500000));
+        sdr.gainMode = extractString(json, "gain_mode", "manual");
+
         double freq = extractDouble(json, "frequency_hz", 0.0);
         if (freq > 1e6) {
             sdr.frequencyHz = static_cast<uint32_t>(freq);

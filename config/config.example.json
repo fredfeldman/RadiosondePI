@@ -10,7 +10,10 @@
     "antenna_port": "AntennaA",
     "lna_state": 0,
     "broadcast_notch": false,
-    "dab_notch": false
+    "dab_notch": false,
+    "rx_channel": 0,
+    "bandwidth_hz": 1500000,
+    "gain_mode": "manual"
   },
   "diversity": {
     "enabled": false,

@@ -13,6 +13,7 @@ enum class SdrDriverType {
     Auto = 0,
     RtlSdr,
     SdrplayRSP,
+    BladeRF,
     Simulation
 };
 
@@ -20,13 +21,14 @@ inline const char* sdrDriverTypeToString(SdrDriverType type) {
     switch (type) {
         case SdrDriverType::RtlSdr: return "RTL-SDR";
         case SdrDriverType::SdrplayRSP: return "SDRplay RSPdx-R2 / RSP";
+        case SdrDriverType::BladeRF: return "Nuand bladeRF (2.0 micro / Classic)";
         case SdrDriverType::Simulation: return "Simulation";
         default: return "Auto";
     }
 }
 
 struct SdrConfig {
-    std::string driver{"auto"}; // "auto", "rtlsdr", "sdrplay", "rspdx", "rsp"
+    std::string driver{"auto"}; // "auto", "rtlsdr", "sdrplay", "rspdx", "rsp", "bladerf"
     int deviceIndex{0};
     uint32_t frequencyHz{403000000};
     uint32_t sampleRate{2400000};
@@ -40,6 +42,11 @@ struct SdrConfig {
     bool broadcastNotch{false}; // Broadcast FM/DAB notch filter
     bool dabNotch{false};
     int ifType{0}; // 0 = Zero-IF, 1 = Low-IF (e.g. 1.62 MHz or 2.048 MHz)
+
+    // Nuand bladeRF specific settings
+    int rxChannel{0}; // 0 = RX1, 1 = RX2 (for bladeRF 2.0 micro xA9/xA4)
+    uint32_t bandwidthHz{1500000}; // Analog LPF bandwidth
+    std::string gainMode{"manual"}; // "manual", "fast", "slow", "hybrid"
 };
 
 class ISdrDevice {

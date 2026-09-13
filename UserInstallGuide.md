@@ -27,7 +27,7 @@ This guide walks you through setting up, configuring, and operating **Radiosonde
 | Item | Recommendation | Notes |
 | :--- | :--- | :--- |
 | **SBC (Single Board Computer)** | Raspberry Pi 4B, 5, 3B+, or Zero 2W | 64-bit OS recommended. |
-| **SDR Receiver** | **SDRplay RSPdx-R2 / RSPdx / RSPduo / RSP1A** or **RTL-SDR v3 / v4** | RSPdx-R2 provides 14-bit ADC, multi-antenna switching (A/B/C), and notch filters. |
+| **SDR Receiver** | **Nuand bladeRF 2.0 micro / Classic**, **SDRplay RSPdx-R2 / RSP**, or **RTL-SDR v3 / v4** | bladeRF provides multi-RX channel (RX1/RX2) and full hardware AGC; RSPdx-R2 provides 14-bit ADC and notch filters. |
 | **Antenna** | 400–406 MHz tuned dipole, ground plane, or turnstile | Vertically polarized for standard radiosonde signals. |
 | **Power Supply** | Official 5V 3A (Pi 4) / 5V 5A (Pi 5) / 5V 2.5A (Pi 3/Zero 2W) | Stable power prevents SDR USB dropouts. |
 | **Optional Filter/LNA** | 403 MHz SAW Bandpass Filter + LNA (Bias-T powered) | Recommended in urban areas with high LTE/PMR interference. |
@@ -38,7 +38,7 @@ This guide walks you through setting up, configuring, and operating **Radiosonde
 
 * **Operating System**: **Raspberry Pi OS (64-bit)** Bullseye (Debian 11), Bookworm (Debian 12), or **Trixie (Debian 13)** (Lite or Desktop).
 * **Compiler & Build Tools**: CMake $\ge 3.20$, GCC/G++ $\ge 11$ (GCC 12, 13, and 14 on Trixie fully supported).
-* **System Libraries**: `librtlsdr-dev`, `libfftw3-dev`, `libsqlite3-dev`, `libssl-dev`.
+* **System Libraries**: `librtlsdr-dev`, `libbladerf-dev`, `libfftw3-dev`, `libsqlite3-dev`, `libssl-dev`.
 
 ---
 
@@ -47,7 +47,7 @@ This guide walks you through setting up, configuring, and operating **Radiosonde
 Run the automated setup script to install dependencies, blacklist interfering kernel DVB drivers, build the binaries, and register the system service:
 
 ```bash
-git clone https://github.com/fredfeldman/RadiosondePI.gitip
+git clone https://github.com/fredfeldman/RadiosondePI.git
 cd RadiosondePI
 chmod +x scripts/install.sh
 ./scripts/install.sh
@@ -63,7 +63,7 @@ If you prefer building manually without running the install script:
 ```bash
 sudo apt-get update
 sudo apt-get install -y git cmake g++ build-essential \
-  librtlsdr-dev libfftw3-dev libsqlite3-dev libssl-dev rtl-sdr
+  librtlsdr-dev libbladerf-dev bladerf libfftw3-dev libsqlite3-dev libssl-dev rtl-sdr
 ```
 
 ### Step 4.2: Clone & Compile RadiosondePI
@@ -128,6 +128,23 @@ sudo systemctl status sdrplay
 
 ---
 
+### C. Nuand bladeRF 2.0 micro / Classic Setup
+Nuand bladeRF devices use `libbladeRF` and USB udev rules.
+
+```bash
+# 1. Install bladeRF CLI tools, library, and FPGA images
+sudo apt-get update
+sudo apt-get install -y bladerf libbladerf-dev bladerf-fpga-hostedxa4 bladerf-fpga-hostedxa9
+
+# 2. Add user to plugdev group
+sudo usermod -aG plugdev $USER
+
+# 3. Check attached bladeRF device status
+bladeRF-cli -p
+```
+
+---
+
 ## 6. Configuration Guide (`config.json`)
 
 Create or edit your runtime configuration file (default location: `/etc/radiosondepi/config.json` or `config/config.example.json`):
@@ -135,7 +152,7 @@ Create or edit your runtime configuration file (default location: `/etc/radioson
 ```json
 {
   "sdr": {
-    "driver": "sdrplay",
+    "driver": "auto",
     "device_index": 0,
     "frequency_hz": 403000000,
     "sample_rate": 2400000,
@@ -145,7 +162,10 @@ Create or edit your runtime configuration file (default location: `/etc/radioson
     "antenna_port": "AntennaA",
     "lna_state": 0,
     "broadcast_notch": false,
-    "dab_notch": false
+    "dab_notch": false,
+    "rx_channel": 0,
+    "bandwidth_hz": 1500000,
+    "gain_mode": "manual"
   },
   "diversity": {
     "enabled": false,
@@ -200,12 +220,15 @@ Create or edit your runtime configuration file (default location: `/etc/radioson
 ```
 
 ### Key Parameter Explanations:
-* `sdr.driver`: Set to `"sdrplay"` (for RSPdx-R2 / RSPdx / RSPduo / RSP1A), `"rtlsdr"`, or `"auto"`.
+* `sdr.driver`: Choose `"auto"`, `"bladerf"`, `"sdrplay"` (for RSPdx-R2 / RSPdx / RSPduo / RSP1A), or `"rtlsdr"`.
+* `sdr.rx_channel`: For bladeRF 2.0 micro, set to `0` for RX1 or `1` for RX2.
+* `sdr.bandwidth_hz`: Analog LPF bandwidth (default: `1500000` = 1.5 MHz).
+* `sdr.gain_mode`: For bladeRF, select `"manual"`, `"fast"` (AGC), `"slow"` (AGC), or `"hybrid"`.
 * `sdr.antenna_port`: For RSPdx-R2, choose `"AntennaA"`, `"AntennaB"`, or `"AntennaC"` (BNC 50Ω ports).
 * `sdr.lna_state`: LNA reduction state ($0 = \text{maximum LNA gain}$, higher integer = reduced gain for strong signals).
 * `sdr.broadcast_notch`: Set to `true` to activate the built-in FM broadcast notch filter ($88\text{--}108\text{ MHz}$).
 * `sdr.gain`: Set to `"auto"` or a manual gain value in tenths of a dB (e.g., `421` for $42.1\text{ dB}$).
-* `sdr.ppm_error`: Frequency oscillator offset in PPM (TCXO on RSPdx-R2 has $<0.5\text{ PPM}$ drift).
+* `sdr.ppm_error`: Frequency oscillator offset in PPM (TCXO on bladeRF and RSPdx-R2 has $<0.5\text{ PPM}$ drift).
 * `sdr.bias_tee`: Set to `true` if powering an external 403 MHz LNA through the antenna port.
   }
 }
