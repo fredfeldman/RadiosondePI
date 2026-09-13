@@ -24,9 +24,32 @@ endif()
 find_package(PkgConfig QUIET)
 if(PKG_CONFIG_FOUND)
     pkg_check_modules(RTLSDR QUIET librtlsdr)
-    pkg_check_modules(FFTW3 QUIET fftw3f)
+    pkg_check_modules(FFTW3 QUIET fftw3f fftw3)
     pkg_check_modules(SQLITE3 QUIET sqlite3)
 endif()
+
+# Fallback direct library search if pkg-config didn't populate variables
+if(NOT FFTW3_LIBRARIES)
+    find_library(FFTW3_LIB NAMES fftw3f fftw3)
+    if(FFTW3_LIB)
+        set(FFTW3_LIBRARIES ${FFTW3_LIB})
+    endif()
+endif()
+
+if(NOT RTLSDR_LIBRARIES)
+    find_library(RTLSDR_LIB NAMES rtlsdr)
+    if(RTLSDR_LIB)
+        set(RTLSDR_LIBRARIES ${RTLSDR_LIB})
+    endif()
+endif()
+
+if(NOT SQLITE3_LIBRARIES)
+    find_library(SQLITE3_LIB NAMES sqlite3)
+    if(SQLITE3_LIB)
+        set(SQLITE3_LIBRARIES ${SQLITE3_LIB})
+    endif()
+endif()
+
 find_package(Threads REQUIRED)
 
 # Include Directories
@@ -52,6 +75,10 @@ target_link_libraries(radiosondepi PRIVATE
     Threads::Threads
 )
 
+if(UNIX AND NOT APPLE)
+    target_link_libraries(radiosondepi PRIVATE m)
+endif()
+
 if(WIN32)
     target_link_libraries(radiosondepi PRIVATE ws2_32)
 endif()
@@ -69,6 +96,10 @@ target_link_libraries(test_sprint1 PRIVATE
     Threads::Threads
 )
 
+if(UNIX AND NOT APPLE)
+    target_link_libraries(test_sprint1 PRIVATE m)
+endif()
+
 if(WIN32)
     target_link_libraries(test_sprint1 PRIVATE ws2_32)
 endif()
@@ -82,8 +113,13 @@ add_executable(test_sprint2
 )
 
 target_link_libraries(test_sprint2 PRIVATE
+    ${FFTW3_LIBRARIES}
     Threads::Threads
 )
+
+if(UNIX AND NOT APPLE)
+    target_link_libraries(test_sprint2 PRIVATE m)
+endif()
 
 # Sprint 3 Unit Tests
 add_executable(test_sprint3
@@ -93,6 +129,10 @@ add_executable(test_sprint3
 target_link_libraries(test_sprint3 PRIVATE
     Threads::Threads
 )
+
+if(UNIX AND NOT APPLE)
+    target_link_libraries(test_sprint3 PRIVATE m)
+endif()
 
 if(WIN32)
     target_link_libraries(test_sprint3 PRIVATE ws2_32)
@@ -106,6 +146,10 @@ add_executable(test_sprint4
 target_link_libraries(test_sprint4 PRIVATE
     Threads::Threads
 )
+
+if(UNIX AND NOT APPLE)
+    target_link_libraries(test_sprint4 PRIVATE m)
+endif()
 
 enable_testing()
 add_test(NAME Sprint1Tests COMMAND test_sprint1)
