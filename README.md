@@ -1,4 +1,4 @@
-# RadiosondePI 🎈📻
+# RadiosondePI 🎈📻   -   very early, not tested.  Created using AI.
 
 A high-performance, native Raspberry Pi Radiosonde Auto-Scanner and Telemetry Decoder using RTL-SDR.
 
