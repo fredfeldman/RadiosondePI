@@ -1,8 +1,8 @@
 #include "decoders/RS41Decoder.hpp"
+#include "utils/MathConstants.hpp"
 #include <cmath>
 #include <cstring>
 #include <iostream>
-#include <numbers>
 #include <array>
 
 namespace RadiosondePI::Decoders {
@@ -143,7 +143,7 @@ void RS41Decoder::ecefToGeodetic(double x, double y, double z, double& lat, doub
     constexpr double e2 = 2.0 * f - f * f;    // first eccentricity squared
     constexpr double ep2 = (a * a - b * b) / (b * b); // second eccentricity squared
 
-    lon = std::atan2(y, x) * (180.0 / std::numbers::pi);
+    lon = std::atan2(y, x) * (180.0 / RadiosondePI::Math::Pi);
 
     double p = std::sqrt(x * x + y * y);
     double theta = std::atan2(z * a, p * b);
@@ -156,7 +156,7 @@ void RS41Decoder::ecefToGeodetic(double x, double y, double z, double& lat, doub
         p - e2 * a * c_theta * c_theta * c_theta
     );
 
-    lat = phi * (180.0 / std::numbers::pi);
+    lat = phi * (180.0 / RadiosondePI::Math::Pi);
 
     double s_phi = std::sin(phi);
     double n = a / std::sqrt(1.0 - e2 * s_phi * s_phi);
@@ -381,7 +381,7 @@ void RS41Decoder::processRawFrame(const uint8_t* frameData, size_t length) {
 
                     telemetry.climbRateMps = vz;
                     telemetry.speedMps = std::sqrt(vx * vx + vy * vy);
-                    telemetry.headingDeg = std::atan2(vx, vy) * (180.0f / std::numbers::pi_v<float>);
+                    telemetry.headingDeg = std::atan2(vx, vy) * (180.0f / RadiosondePI::Math::PiF);
                     if (telemetry.headingDeg < 0.0f) telemetry.headingDeg += 360.0f;
                     telemetry.satellitesVisible = payload[18];
                 }

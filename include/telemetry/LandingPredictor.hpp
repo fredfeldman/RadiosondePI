@@ -1,10 +1,10 @@
 #pragma once
 
 #include "telemetry/TelemetryData.hpp"
+#include "utils/MathConstants.hpp"
 #include <vector>
 #include <deque>
 #include <cmath>
-#include <numbers>
 
 namespace RadiosondePI::Telemetry {
 
@@ -46,7 +46,7 @@ public:
         double currAlt = latest.altitudeMeters;
         float descentRate = std::abs(latest.climbRateMps); // m/s downwards
         float speed = latest.speedMps;                      // m/s ground speed
-        float headingRad = latest.headingDeg * (std::numbers::pi_v<float> / 180.0f);
+        float headingRad = latest.headingDeg * (RadiosondePI::Math::PiF / 180.0f);
 
         int timeElapsed = 0;
         constexpr int timeStepSec = 10;
@@ -59,7 +59,7 @@ public:
 
             double distanceTraveled = speed * timeStepSec;
             double dLat = (distanceTraveled * std::cos(headingRad)) / metersPerDegreeLat;
-            double dLon = (distanceTraveled * std::sin(headingRad)) / (metersPerDegreeLat * std::cos(currLat * std::numbers::pi / 180.0));
+            double dLon = (distanceTraveled * std::sin(headingRad)) / (metersPerDegreeLat * std::cos(currLat * RadiosondePI::Math::Pi / 180.0));
 
             currLat += dLat;
             currLon += dLon;

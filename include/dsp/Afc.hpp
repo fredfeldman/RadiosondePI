@@ -1,9 +1,9 @@
 #pragma once
 
+#include "utils/MathConstants.hpp"
 #include <complex>
 #include <vector>
 #include <cmath>
-#include <numbers>
 
 namespace RadiosondePI::DSP {
 
@@ -35,16 +35,16 @@ public:
 
     void rotateBlock(const Complex32* input, size_t count, std::vector<Complex32>& output) {
         output.resize(count);
-        float phaseInc = -2.0f * std::numbers::pi_v<float> * (m_frequencyOffsetHz / m_sampleRate);
+        float phaseInc = -2.0f * RadiosondePI::Math::PiF * (m_frequencyOffsetHz / m_sampleRate);
 
         for (size_t i = 0; i < count; ++i) {
             Complex32 rotator(std::cos(m_phase), std::sin(m_phase));
             output[i] = input[i] * rotator;
             m_phase += phaseInc;
-            if (m_phase > std::numbers::pi_v<float>) {
-                m_phase -= 2.0f * std::numbers::pi_v<float>;
-            } else if (m_phase < -std::numbers::pi_v<float>) {
-                m_phase += 2.0f * std::numbers::pi_v<float>;
+            if (m_phase > RadiosondePI::Math::PiF) {
+                m_phase -= 2.0f * RadiosondePI::Math::PiF;
+            } else if (m_phase < -RadiosondePI::Math::PiF) {
+                m_phase += 2.0f * RadiosondePI::Math::PiF;
             }
         }
     }

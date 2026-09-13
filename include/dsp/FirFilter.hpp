@@ -1,10 +1,10 @@
 #pragma once
 
+#include "utils/MathConstants.hpp"
 #include <vector>
 #include <complex>
 #include <cmath>
 #include <cstdint>
-#include <numbers>
 
 namespace RadiosondePI::DSP {
 
@@ -26,10 +26,10 @@ public:
         for (int i = 0; i < static_cast<int>(numTaps); ++i) {
             float n = static_cast<float>(i - middle);
             float sinc = (n == 0.0f) ? (2.0f * normalizedCutoff) : 
-                std::sin(2.0f * std::numbers::pi_v<float> * normalizedCutoff * n) / (std::numbers::pi_v<float> * n);
+                std::sin(2.0f * RadiosondePI::Math::PiF * normalizedCutoff * n) / (RadiosondePI::Math::PiF * n);
             
             // Hamming window
-            float window = 0.54f - 0.46f * std::cos(2.0f * std::numbers::pi_v<float> * static_cast<float>(i) / (numTaps - 1));
+            float window = 0.54f - 0.46f * std::cos(2.0f * RadiosondePI::Math::PiF * static_cast<float>(i) / (numTaps - 1));
             m_taps[i] = sinc * window;
             sum += m_taps[i];
         }

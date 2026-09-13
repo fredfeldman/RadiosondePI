@@ -1,9 +1,9 @@
 #pragma once
 
+#include "utils/MathConstants.hpp"
 #include <vector>
 #include <complex>
 #include <cmath>
-#include <numbers>
 
 namespace RadiosondePI::DSP {
 
@@ -20,7 +20,7 @@ public:
 
         // Angle in radians [-pi, pi] normalized to [-1.0, 1.0]
         float angle = std::atan2(product.imag(), product.real());
-        return angle / std::numbers::pi_v<float>;
+        return angle / RadiosondePI::Math::PiF;
     }
 
     void processBlock(const Complex32* input, size_t count, std::vector<float>& output) {

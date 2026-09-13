@@ -1,8 +1,8 @@
 #include "scanner/SpectrumScanner.hpp"
+#include "utils/MathConstants.hpp"
 #include <cmath>
 #include <numeric>
 #include <algorithm>
-#include <numbers>
 
 namespace RadiosondePI::Scanner {
 
@@ -22,7 +22,7 @@ void SpectrumScanner::initWindow(size_t size) {
     m_window.resize(size);
     for (size_t i = 0; i < size; ++i) {
         // Hann window: 0.5 * (1 - cos(2*pi*n / (N-1)))
-        m_window[i] = 0.5f * (1.0f - std::cos(2.0f * std::numbers::pi_v<float> * static_cast<float>(i) / (size - 1)));
+        m_window[i] = 0.5f * (1.0f - std::cos(2.0f * RadiosondePI::Math::PiF * static_cast<float>(i) / (size - 1)));
     }
 }
 
@@ -49,7 +49,7 @@ std::vector<PeakResult> SpectrumScanner::analyzeBlock(const Complex32* samples, 
         // Approximate bin energy
         Complex32 sum(0.0f, 0.0f);
         // DFT kernel calculation or FFT
-        float angleStep = -2.0f * std::numbers::pi_v<float> * static_cast<float>(k) / static_cast<float>(N);
+        float angleStep = -2.0f * RadiosondePI::Math::PiF * static_cast<float>(k) / static_cast<float>(N);
         for (size_t n = 0; n < std::min(N, (size_t)256); ++n) {
             float a = angleStep * n;
             Complex32 rot(std::cos(a), std::sin(a));
