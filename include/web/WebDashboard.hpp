@@ -24,6 +24,7 @@ constexpr socket_t INVALID_SOCK = -1;
 #endif
 
 #include "telemetry/TelemetryData.hpp"
+#include "utils/CryptoUtils.hpp"
 #include <string>
 #include <vector>
 #include <mutex>
@@ -34,6 +35,7 @@ constexpr socket_t INVALID_SOCK = -1;
 #include <atomic>
 #include <iostream>
 #include <cstring>
+#include <algorithm>
 
 namespace RadiosondePI::Web {
 
@@ -53,37 +55,23 @@ public:
     }
 
     void updateTelemetry(const Telemetry::TelemetryFrame& frame) {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        m_latestFrame = frame;
-        m_history.push_back(frame);
-        if (m_history.size() > 500) {
-            m_history.erase(m_history.begin());
+        std::string jsonPayload;
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_latestFrame = frame;
+            m_history.push_back(frame);
+            if (m_history.size() > 500) {
+                m_history.erase(m_history.begin());
+            }
+            jsonPayload = formatTelemetryJsonInternal(m_latestFrame);
         }
+
+        broadcastWebSocket(jsonPayload);
     }
 
     [[nodiscard]] std::string getLatestTelemetryJson() const {
         std::lock_guard<std::mutex> lock(m_mutex);
-        const auto& f = m_latestFrame;
-
-        std::stringstream json;
-        json << std::fixed << std::setprecision(5);
-        json << "{\n";
-        json << "  \"type\": \"" << Telemetry::sondeTypeToString(f.type) << "\",\n";
-        json << "  \"serial\": \"" << f.serialNumber << "\",\n";
-        json << "  \"frame\": " << f.frameNumber << ",\n";
-        json << "  \"freq_hz\": " << f.frequencyHz << ",\n";
-        json << "  \"lat\": " << f.latitude << ",\n";
-        json << "  \"lon\": " << f.longitude << ",\n";
-        json << "  \"alt\": " << std::setprecision(1) << f.altitudeMeters << ",\n";
-        json << "  \"climb\": " << std::setprecision(2) << f.climbRateMps << ",\n";
-        json << "  \"speed\": " << std::setprecision(2) << f.speedMps * 3.6f << ",\n";
-        json << "  \"heading\": " << std::setprecision(1) << f.headingDeg << ",\n";
-        json << "  \"temp\": " << (f.temperatureC.has_value() ? std::to_string(*f.temperatureC) : "null") << ",\n";
-        json << "  \"rh\": " << (f.relativeHumidityPercent.has_value() ? std::to_string(*f.relativeHumidityPercent) : "null") << ",\n";
-        json << "  \"batt\": " << (f.batteryVoltageV.has_value() ? std::to_string(*f.batteryVoltageV) : "null") << ",\n";
-        json << "  \"gps_valid\": " << (f.gpsValid ? "true" : "false") << "\n";
-        json << "}";
-        return json.str();
+        return formatTelemetryJsonInternal(m_latestFrame);
     }
 
     [[nodiscard]] std::string getFlightPathJson() const {
@@ -140,7 +128,7 @@ public:
             return false;
         }
 
-        if (listen(m_serverSock, 10) != 0) {
+        if (listen(m_serverSock, 16) != 0) {
             std::cerr << "[WEB] Failed to listen on socket" << std::endl;
             CLOSE_SOCK(m_serverSock);
             m_serverSock = INVALID_SOCK;
@@ -149,7 +137,7 @@ public:
 
         m_running = true;
         m_serverThread = std::thread(&WebDashboard::serverLoop, this);
-        std::cout << "[WEB] Embedded HTTP Server running at http://" << m_config.bindAddress << ":" << m_config.port << std::endl;
+        std::cout << "[WEB] Embedded HTTP & WebSocket Server running at http://" << m_config.bindAddress << ":" << m_config.port << std::endl;
         return true;
     }
 
@@ -162,6 +150,15 @@ public:
             m_serverSock = INVALID_SOCK;
         }
 
+        // Close all WebSocket clients
+        {
+            std::lock_guard<std::mutex> lock(m_wsMutex);
+            for (socket_t sock : m_wsClients) {
+                CLOSE_SOCK(sock);
+            }
+            m_wsClients.clear();
+        }
+
         if (m_serverThread.joinable()) {
             m_serverThread.join();
         }
@@ -171,7 +168,70 @@ public:
 #endif
     }
 
+    [[nodiscard]] size_t getActiveWebSocketClients() const {
+        std::lock_guard<std::mutex> lock(m_wsMutex);
+        return m_wsClients.size();
+    }
+
 private:
+    static std::string formatTelemetryJsonInternal(const Telemetry::TelemetryFrame& f) {
+        std::stringstream json;
+        json << std::fixed << std::setprecision(5);
+        json << "{\n";
+        json << "  \"type\": \"" << Telemetry::sondeTypeToString(f.type) << "\",\n";
+        json << "  \"serial\": \"" << f.serialNumber << "\",\n";
+        json << "  \"frame\": " << f.frameNumber << ",\n";
+        json << "  \"freq_hz\": " << f.frequencyHz << ",\n";
+        json << "  \"lat\": " << f.latitude << ",\n";
+        json << "  \"lon\": " << f.longitude << ",\n";
+        json << "  \"alt\": " << std::setprecision(1) << f.altitudeMeters << ",\n";
+        json << "  \"climb\": " << std::setprecision(2) << f.climbRateMps << ",\n";
+        json << "  \"speed\": " << std::setprecision(2) << f.speedMps * 3.6f << ",\n";
+        json << "  \"heading\": " << std::setprecision(1) << f.headingDeg << ",\n";
+        json << "  \"temp\": " << (f.temperatureC.has_value() ? std::to_string(*f.temperatureC) : "null") << ",\n";
+        json << "  \"rh\": " << (f.relativeHumidityPercent.has_value() ? std::to_string(*f.relativeHumidityPercent) : "null") << ",\n";
+        json << "  \"batt\": " << (f.batteryVoltageV.has_value() ? std::to_string(*f.batteryVoltageV) : "null") << ",\n";
+        json << "  \"gps_valid\": " << (f.gpsValid ? "true" : "false") << "\n";
+        json << "}";
+        return json.str();
+    }
+
+    void broadcastWebSocket(const std::string& text) {
+        if (text.empty()) return;
+
+        // Build WebSocket frame (Opcode 0x1 = text, unmasked from server)
+        std::vector<uint8_t> frame;
+        frame.push_back(0x81); // FIN + Text opcode
+
+        size_t len = text.size();
+        if (len <= 125) {
+            frame.push_back(static_cast<uint8_t>(len));
+        } else if (len <= 65535) {
+            frame.push_back(126);
+            frame.push_back(static_cast<uint8_t>((len >> 8) & 0xFF));
+            frame.push_back(static_cast<uint8_t>(len & 0xFF));
+        } else {
+            frame.push_back(127);
+            for (int i = 7; i >= 0; --i) {
+                frame.push_back(static_cast<uint8_t>((len >> (i * 8)) & 0xFF));
+            }
+        }
+
+        frame.insert(frame.end(), text.begin(), text.end());
+
+        std::lock_guard<std::mutex> lock(m_wsMutex);
+        auto it = m_wsClients.begin();
+        while (it != m_wsClients.end()) {
+            int sent = send(*it, reinterpret_cast<const char*>(frame.data()), static_cast<int>(frame.size()), 0);
+            if (sent <= 0) {
+                CLOSE_SOCK(*it);
+                it = m_wsClients.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+
     void serverLoop() {
         while (m_running) {
             sockaddr_in clientAddr{};
@@ -186,25 +246,73 @@ private:
                 continue;
             }
 
-            char reqBuf[2048]{};
+            char reqBuf[4096]{};
             int bytesRead = recv(clientSock, reqBuf, sizeof(reqBuf) - 1, 0);
             if (bytesRead > 0) {
                 reqBuf[bytesRead] = '\0';
-                handleHttpRequest(clientSock, reqBuf);
+                bool keepSocketOpen = handleHttpRequest(clientSock, reqBuf);
+                if (!keepSocketOpen) {
+                    CLOSE_SOCK(clientSock);
+                }
+            } else {
+                CLOSE_SOCK(clientSock);
             }
-            CLOSE_SOCK(clientSock);
         }
     }
 
-    void handleHttpRequest(socket_t clientSock, const char* request) {
+    bool handleHttpRequest(socket_t clientSock, const char* request) {
         std::string req(request);
         std::string method, path;
         std::stringstream ss(req);
         ss >> method >> path;
 
+        // 1. Check for WebSocket Upgrade
+        if (req.find("Upgrade: websocket") != std::string::npos ||
+            req.find("upgrade: websocket") != std::string::npos) {
+            
+            size_t keyPos = req.find("Sec-WebSocket-Key: ");
+            if (keyPos == std::string::npos) {
+                keyPos = req.find("sec-websocket-key: ");
+            }
+
+            if (keyPos != std::string::npos) {
+                size_t start = keyPos + 19;
+                size_t end = req.find("\r\n", start);
+                if (end != std::string::npos) {
+                    std::string secKey = req.substr(start, end - start);
+                    std::string acceptKey = Utils::CryptoUtils::generateWebSocketAccept(secKey);
+
+                    std::stringstream handshake;
+                    handshake << "HTTP/1.1 101 Switching Protocols\r\n";
+                    handshake << "Upgrade: websocket\r\n";
+                    handshake << "Connection: Upgrade\r\n";
+                    handshake << "Sec-WebSocket-Accept: " << acceptKey << "\r\n\r\n";
+
+                    std::string handshakeStr = handshake.str();
+                    send(clientSock, handshakeStr.data(), static_cast<int>(handshakeStr.size()), 0);
+
+                    // Add to persistent WebSocket client pool
+                    {
+                        std::lock_guard<std::mutex> lock(m_wsMutex);
+                        m_wsClients.push_back(clientSock);
+                    }
+
+                    // Send initial snapshot immediately
+                    std::string initialJson;
+                    {
+                        std::lock_guard<std::mutex> lock(m_mutex);
+                        initialJson = formatTelemetryJsonInternal(m_latestFrame);
+                    }
+                    broadcastWebSocket(initialJson);
+
+                    return true; // Keep socket open
+                }
+            }
+        }
+
         if (method != "GET") {
             sendResponse(clientSock, 405, "Method Not Allowed", "text/plain", "Method Not Allowed");
-            return;
+            return false;
         }
 
         if (path == "/api/telemetry") {
@@ -226,7 +334,6 @@ private:
 
             std::ifstream file(filePath, std::ios::binary);
             if (!file.is_open()) {
-                // Try relative to workspace
                 file.open("../" + filePath, std::ios::binary);
             }
 
@@ -238,6 +345,7 @@ private:
                 sendResponse(clientSock, 404, "Not Found", "text/plain", "404 Not Found");
             }
         }
+        return false;
     }
 
     void sendResponse(socket_t clientSock, int statusCode, const std::string& statusText,
@@ -258,6 +366,9 @@ private:
     mutable std::mutex m_mutex;
     Telemetry::TelemetryFrame m_latestFrame;
     std::vector<Telemetry::TelemetryFrame> m_history;
+
+    mutable std::mutex m_wsMutex;
+    std::vector<socket_t> m_wsClients;
 
     socket_t m_serverSock{INVALID_SOCK};
     std::atomic<bool> m_running{false};

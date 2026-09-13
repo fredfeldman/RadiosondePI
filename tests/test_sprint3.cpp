@@ -142,6 +142,16 @@ void testAeroHubPayloadFormatting() {
     std::cout << "[TEST PASSED] AeroHub telemetry payload formatter (RadioSondeImportRecord contract)." << std::endl;
 }
 
+void testWebSocketHandshakeAccept() {
+    // RFC 6455 test vector
+    // Client Key: "dGhlIHNhbXBsZSBub25jZQ==" -> Accept: "s3pPLMBiTxaQ9kYGzzhZRbK+xOo="
+    std::string clientKey = "dGhlIHNhbXBsZSBub25jZQ==";
+    std::string acceptKey = RadiosondePI::Utils::CryptoUtils::generateWebSocketAccept(clientKey);
+    assert(acceptKey == "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=");
+
+    std::cout << "[TEST PASSED] RFC 6455 WebSocket handshake accept key calculation." << std::endl;
+}
+
 int main() {
     std::cout << "--- Running Sprint 3 Web UI & Uplink Tests ---" << std::endl;
     testSondeHubPayloadFormatting();
@@ -149,6 +159,7 @@ int main() {
     testAeroHubPayloadFormatting();
     testLandingPredictor();
     testWebDashboardSerialization();
+    testWebSocketHandshakeAccept();
     std::cout << "--- All Sprint 3 Tests Passed ---" << std::endl;
     return 0;
 }

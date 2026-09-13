@@ -34,7 +34,14 @@ public:
     }
 
     void rotateBlock(const Complex32* input, size_t count, std::vector<Complex32>& output) {
-        output.resize(count);
+        if (output.size() < count) {
+            output.resize(count);
+        }
+        rotateBlockZeroAlloc(input, count, output.data());
+    }
+
+    void rotateBlockZeroAlloc(const Complex32* input, size_t count, Complex32* output) {
+        if (!input || !output || count == 0) return;
         float phaseInc = -2.0f * RadiosondePI::Math::PiF * (m_frequencyOffsetHz / m_sampleRate);
 
         for (size_t i = 0; i < count; ++i) {

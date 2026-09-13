@@ -6,6 +6,11 @@
     "gain": "auto",
     "bias_tee": false
   },
+  "diversity": {
+    "enabled": false,
+    "mode": "MaximalRatioCombining",
+    "secondary_device_index": 1
+  },
   "scanner": {
     "enabled": true,
     "min_frequency_hz": 400050000,

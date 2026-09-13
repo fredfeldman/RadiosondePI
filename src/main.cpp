@@ -9,10 +9,12 @@
 #include <sstream>
 
 #include "sdr/RtlSdrDevice.hpp"
+#include "sdr/DiversityReceiver.hpp"
 #include "dsp/FirFilter.hpp"
 #include "dsp/FmDiscriminator.hpp"
 #include "dsp/SymbolSync.hpp"
 #include "dsp/Afc.hpp"
+#include "dsp/DiversityCombiner.hpp"
 #include "scanner/SpectrumScanner.hpp"
 #include "decoders/RS41Decoder.hpp"
 #include "decoders/DFMDecoder.hpp"
@@ -43,6 +45,7 @@ int main(int argc, char* argv[]) {
     uint32_t frequencyHz = 403000000;
     std::string configPath = "config/config.example.json";
     bool autoScan = false;
+    bool diversityMode = false;
     uint16_t webPort = 8080;
 
     for (int i = 1; i < argc; ++i) {
@@ -53,6 +56,8 @@ int main(int argc, char* argv[]) {
             configPath = argv[++i];
         } else if (arg == "--scan" || arg == "-s") {
             autoScan = true;
+        } else if (arg == "--diversity" || arg == "-d") {
+            diversityMode = true;
         } else if ((arg == "--port" || arg == "-p") && i + 1 < argc) {
             webPort = static_cast<uint16_t>(std::stoi(argv[++i]));
         }
@@ -162,54 +167,76 @@ int main(int argc, char* argv[]) {
     RadiosondePI::Scanner::ScannerConfig scannerConfig{};
     RadiosondePI::Scanner::SpectrumScanner spectrumScanner(scannerConfig);
 
-    // 6. Initialize RTL-SDR Device
-    RadiosondePI::SDR::RtlSdrDevice sdr;
-    RadiosondePI::SDR::SdrConfig sdrConfig{};
-    sdrConfig.deviceIndex = 0;
-    sdrConfig.frequencyHz = frequencyHz;
-    sdrConfig.sampleRate = static_cast<uint32_t>(inputSampleRate);
-    sdrConfig.gain = 0; // Auto gain
+    // 6. Initialize RTL-SDR Device / Diversity Receiver
+    RadiosondePI::SDR::DiversityConfig divConfig{};
+    divConfig.enabled = diversityMode;
+    divConfig.mode = RadiosondePI::DSP::DiversityMode::MaximalRatioCombining;
 
-    if (!sdr.open(sdrConfig)) {
-        std::cerr << "[ERROR] Could not open SDR device." << std::endl;
+    RadiosondePI::SDR::SdrConfig dev0{};
+    dev0.deviceIndex = 0;
+    dev0.frequencyHz = frequencyHz;
+    dev0.sampleRate = static_cast<uint32_t>(inputSampleRate);
+    dev0.gain = 0;
+    divConfig.dongleConfigs.push_back(dev0);
+
+    if (diversityMode) {
+        RadiosondePI::SDR::SdrConfig dev1{};
+        dev1.deviceIndex = 1;
+        dev1.frequencyHz = frequencyHz;
+        dev1.sampleRate = static_cast<uint32_t>(inputSampleRate);
+        dev1.gain = 0;
+        divConfig.dongleConfigs.push_back(dev1);
+        std::cout << "[SDR] Dual-dongle diversity receiver enabled (Maximal Ratio Combining)." << std::endl;
+    }
+
+    RadiosondePI::SDR::DiversityReceiver sdrReceiver(divConfig);
+    if (!sdrReceiver.open()) {
+        std::cerr << "[ERROR] Could not open SDR receiver." << std::endl;
         return 1;
     }
 
-    std::vector<RadiosondePI::DSP::Complex32> decimatedSamples;
-    std::vector<RadiosondePI::DSP::Complex32> afcRotatedSamples;
-    std::vector<float> demodulatedAudio;
+    // Zero-allocation pre-allocated DSP processing buffers
+    constexpr size_t maxDecimatedBufferSize = 65536;
+    std::vector<RadiosondePI::DSP::Complex32> decimatedBuffer(maxDecimatedBufferSize);
+    std::vector<RadiosondePI::DSP::Complex32> afcRotatedBuffer(maxDecimatedBufferSize);
+    std::vector<float> demodulatedAudioBuffer(maxDecimatedBufferSize);
 
-    // Start SDR async ingestion
-    sdr.startAsync([&](const RadiosondePI::DSP::Complex32* samples, size_t count) {
+    // Start SDR async ingestion with zero heap allocations per block
+    sdrReceiver.start([&](const RadiosondePI::DSP::Complex32* samples, size_t count) {
         // Optional Wideband Spectrum Scanner Hook
         if (autoScan) {
             spectrumScanner.analyzeBlock(samples, count, frequencyHz, inputSampleRate);
         }
 
-        // Channel Decimation Filter
-        channelFilter.processBlockDecimate(samples, count, decimationFactor, decimatedSamples);
+        // 1. Zero-allocation Channel Decimation Filter
+        size_t decimatedCount = channelFilter.processBlockDecimateZeroAlloc(
+            samples, count, decimationFactor,
+            decimatedBuffer.data(), decimatedBuffer.size()
+        );
 
-        // AFC Frequency Correction
-        afc.rotateBlock(decimatedSamples.data(), decimatedSamples.size(), afcRotatedSamples);
+        if (decimatedCount == 0) return;
 
-        // FM Demodulation
-        fmDemod.processBlock(afcRotatedSamples.data(), afcRotatedSamples.size(), demodulatedAudio);
+        // 2. Zero-allocation AFC Frequency Correction
+        afc.rotateBlockZeroAlloc(decimatedBuffer.data(), decimatedCount, afcRotatedBuffer.data());
 
-        // Feed Audio Stream into Multi-Baud Symbol Synchronizers
-        syncRS41.processBlock(demodulatedAudio.data(), demodulatedAudio.size());
-        syncDFM.processBlock(demodulatedAudio.data(), demodulatedAudio.size());
-        syncM10.processBlock(demodulatedAudio.data(), demodulatedAudio.size());
+        // 3. Zero-allocation FM Demodulation
+        fmDemod.processBlockZeroAlloc(afcRotatedBuffer.data(), decimatedCount, demodulatedAudioBuffer.data());
+
+        // 4. Feed Audio Stream into Multi-Baud Symbol Synchronizers
+        syncRS41.processBlock(demodulatedAudioBuffer.data(), decimatedCount);
+        syncDFM.processBlock(demodulatedAudioBuffer.data(), decimatedCount);
+        syncM10.processBlock(demodulatedAudioBuffer.data(), decimatedCount);
     });
 
-    std::cout << "[DSP] Multi-protocol pipeline running. Press Ctrl+C to terminate." << std::endl;
+    std::cout << "[DSP] Zero-allocation multi-protocol pipeline running. Press Ctrl+C to terminate." << std::endl;
 
     while (g_keepRunning) {
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }
 
     std::cout << "\n[SHUTDOWN] Stopping SDR acquisition..." << std::endl;
-    sdr.stopAsync();
-    sdr.close();
+    sdrReceiver.stop();
+    sdrReceiver.close();
 
     std::cout << "[SHUTDOWN] Stopping Web Dashboard..." << std::endl;
     webDashboard.stop();

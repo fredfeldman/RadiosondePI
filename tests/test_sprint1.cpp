@@ -68,12 +68,29 @@ void testReedSolomonFec() {
     std::cout << "[TEST PASSED] Reed-Solomon (255, 231) Berlekamp-Massey & Chien search." << std::endl;
 }
 
+void testZeroAllocFirAndDemod() {
+    RadiosondePI::DSP::FirFilter filter;
+    filter.initLowPass(15, 48000.0f, 5000.0f);
+
+    std::vector<RadiosondePI::DSP::Complex32> input(100, RadiosondePI::DSP::Complex32(1.0f, 0.5f));
+    RadiosondePI::DSP::Complex32 output[20];
+    size_t written = filter.processBlockDecimateZeroAlloc(input.data(), input.size(), 5, output, 20);
+    assert(written == 20);
+
+    RadiosondePI::DSP::FmDiscriminator demod;
+    float audio[20];
+    demod.processBlockZeroAlloc(output, 20, audio);
+
+    std::cout << "[TEST PASSED] Zero-allocation decimation and demodulation buffer pipeline." << std::endl;
+}
+
 int main() {
     std::cout << "--- Running Sprint 1 DSP & Decoder Tests ---" << std::endl;
     testRingBuffer();
     testEcefConversion();
     testFmDiscriminator();
     testReedSolomonFec();
+    testZeroAllocFirAndDemod();
     std::cout << "--- All Sprint 1 Tests Passed ---" << std::endl;
     return 0;
 }

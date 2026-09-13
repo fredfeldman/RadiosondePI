@@ -63,39 +63,53 @@ public:
     }
 
     /**
-     * @brief Optimized decimation FIR filter.
-     * Computes the FIR convolution ONLY on every N-th (decimationFactor) sample,
-     * avoiding redundant dot-product calculations on skipped samples.
+     * @brief Optimized decimation FIR filter (vector output).
      */
     void processBlockDecimate(const Complex32* input, size_t inputLength, size_t decimationFactor, std::vector<Complex32>& output) {
         if (inputLength == 0 || decimationFactor == 0) return;
 
-        output.clear();
-        output.reserve((inputLength + decimationFactor - 1) / decimationFactor);
+        size_t expectedCount = (inputLength + decimationFactor - 1) / decimationFactor;
+        if (output.size() < expectedCount) {
+            output.resize(expectedCount);
+        }
+
+        size_t written = processBlockDecimateZeroAlloc(input, inputLength, decimationFactor, output.data(), output.size());
+        output.resize(written);
+    }
+
+    /**
+     * @brief Zero-allocation decimation FIR filter operating directly on raw pointer buffers.
+     */
+    size_t processBlockDecimateZeroAlloc(const Complex32* input, size_t inputLength, size_t decimationFactor, Complex32* output, size_t maxOutputCapacity) {
+        if (inputLength == 0 || decimationFactor == 0 || output == nullptr || maxOutputCapacity == 0) return 0;
 
         size_t size = m_taps.size();
+        size_t outIdx = 0;
 
         for (size_t i = 0; i < inputLength; ++i) {
             m_history[m_historyIndex] = input[i];
 
             if (m_decimationPhase == 0) {
-                // Compute FIR dot product only at decimation output intervals
-                Complex32 acc(0.0f, 0.0f);
-                size_t idx = m_historyIndex;
-                for (size_t k = 0; k < size; ++k) {
-                    acc += m_history[idx] * m_taps[k];
-                    if (idx == 0) {
-                        idx = size - 1;
-                    } else {
-                        --idx;
+                if (outIdx < maxOutputCapacity) {
+                    Complex32 acc(0.0f, 0.0f);
+                    size_t idx = m_historyIndex;
+                    for (size_t k = 0; k < size; ++k) {
+                        acc += m_history[idx] * m_taps[k];
+                        if (idx == 0) {
+                            idx = size - 1;
+                        } else {
+                            --idx;
+                        }
                     }
+                    output[outIdx++] = acc;
                 }
-                output.push_back(acc);
             }
 
             m_historyIndex = (m_historyIndex + 1) % size;
             m_decimationPhase = (m_decimationPhase + 1) % decimationFactor;
         }
+
+        return outIdx;
     }
 
     void reset() {

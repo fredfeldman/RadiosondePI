@@ -24,7 +24,14 @@ public:
     }
 
     void processBlock(const Complex32* input, size_t count, std::vector<float>& output) {
-        output.resize(count);
+        if (output.size() < count) {
+            output.resize(count);
+        }
+        processBlockZeroAlloc(input, count, output.data());
+    }
+
+    void processBlockZeroAlloc(const Complex32* input, size_t count, float* output) {
+        if (!input || !output || count == 0) return;
         for (size_t i = 0; i < count; ++i) {
             output[i] = processSample(input[i]);
         }

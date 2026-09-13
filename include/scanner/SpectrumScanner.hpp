@@ -30,7 +30,13 @@ public:
     using PeakFoundCallback = std::function<void(const PeakResult&)>;
 
     explicit SpectrumScanner(const ScannerConfig& config = ScannerConfig{});
-    ~SpectrumScanner() = default;
+    ~SpectrumScanner();
+
+    // Disable copy, enable move
+    SpectrumScanner(const SpectrumScanner&) = delete;
+    SpectrumScanner& operator=(const SpectrumScanner&) = delete;
+    SpectrumScanner(SpectrumScanner&&) noexcept;
+    SpectrumScanner& operator=(SpectrumScanner&&) noexcept;
 
     void setConfig(const ScannerConfig& config);
     [[nodiscard]] const ScannerConfig& getConfig() const { return m_config; }
@@ -46,6 +52,12 @@ private:
 
     std::vector<float> m_window;
     std::vector<float> m_powerSpectrum;
+    std::vector<Complex32> m_fftInput;
+    std::vector<Complex32> m_fftOutput;
+
+    void* m_fftwPlan{nullptr};
+    void initFft();
+    void cleanupFft();
     void initWindow(size_t size);
 };
 
