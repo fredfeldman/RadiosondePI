@@ -1,0 +1,141 @@
+:root {
+  --bg: #0f172a;
+  --panel: #1e293b;
+  --border: #334155;
+  --text: #f8fafc;
+  --muted: #94a3b8;
+  --accent: #38bdf8;
+  --green: #22c55e;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+header {
+  height: 56px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logo h1 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.badge {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: #475569;
+  font-weight: 600;
+}
+
+.badge.active {
+  background: var(--green);
+  color: #000;
+}
+
+.header-info {
+  display: flex;
+  gap: 16px;
+  font-size: 0.9rem;
+}
+
+.header-info .freq {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.main-layout {
+  display: flex;
+  flex: 1;
+  height: calc(100vh - 56px);
+}
+
+#map {
+  flex: 1;
+  height: 100%;
+}
+
+.sidebar {
+  width: 360px;
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+}
+
+.card {
+  background: #0f172a80;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.card h3 {
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+}
+
+.metric label {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.metric span {
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.metric span.highlight {
+  color: var(--accent);
+}
+
+.desc {
+  font-size: 0.85rem;
+  color: var(--muted);
+}

@@ -1,0 +1,18 @@
+[Unit]
+Description=RadiosondePI RTL-SDR Auto-Scanner & Telemetry Decoder Service
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/opt/radiosondepi
+ExecStart=/opt/radiosondepi/bin/radiosondepi --config /etc/radiosondepi/config.json
+Restart=always
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+Nice=-10
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,41 @@
+# Build directories
+build/
+bin/
+obj/
+out/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# Compiled binaries and libraries
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+radiosondepi
+test_sprint1
+test_sprint2
+test_sprint3
+test_sprint4
+
+# IDE and Editor files
+.vscode/
+.vs/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs and local databases
+*.log
+*.sqlite
+*.sqlite3
+*.db

@@ -1,0 +1,47 @@
+{
+  "sdr": {
+    "device_index": 0,
+    "sample_rate": 2400000,
+    "ppm_error": 0,
+    "gain": "auto",
+    "bias_tee": false
+  },
+  "scanner": {
+    "enabled": true,
+    "min_frequency_hz": 400050000,
+    "max_frequency_hz": 406000000,
+    "step_hz": 1800000,
+    "dwell_time_ms": 250,
+    "detection_threshold_db": 8.0
+  },
+  "station": {
+    "callsign": "N0CALL",
+    "latitude": 0.0,
+    "longitude": 0.0,
+    "altitude_m": 0.0,
+    "antenna": "Turnstile 403MHz"
+  },
+  "web": {
+    "enabled": true,
+    "port": 8080,
+    "bind_address": "0.0.0.0"
+  },
+  "uplink": {
+    "sondehub": {
+      "enabled": false,
+      "uploader_position": true
+    },
+    "aprs_is": {
+      "enabled": false,
+      "server": "rotate.aprs2.net",
+      "port": 14580,
+      "passcode": -1
+    },
+    "mqtt": {
+      "enabled": false,
+      "host": "localhost",
+      "port": 1883,
+      "topic_prefix": "radiosonde"
+    }
+  }
+}

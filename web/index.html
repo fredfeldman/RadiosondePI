@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RadiosondePI - Live Flight Tracker</title>
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo">
+        <span class="icon">🎈</span>
+        <h1>RadiosondePI</h1>
+        <span class="badge" id="status-badge">STANDBY</span>
+      </div>
+      <div class="header-info">
+        <span id="sonde-title">No Active Sonde Locked</span>
+        <span class="freq" id="sonde-freq">---.--- MHz</span>
+      </div>
+    </header>
+
+    <div class="main-layout">
+      <!-- Live Map -->
+      <div id="map"></div>
+
+      <!-- Telemetry Sidebar -->
+      <aside class="sidebar">
+        <div class="card">
+          <h3>📍 Position & Trajectory</h3>
+          <div class="metric-grid">
+            <div class="metric">
+              <label>Latitude</label>
+              <span id="val-lat">--.-----</span>
+            </div>
+            <div class="metric">
+              <label>Longitude</label>
+              <span id="val-lon">--.-----</span>
+            </div>
+            <div class="metric">
+              <label>Altitude</label>
+              <span class="highlight" id="val-alt">-- m</span>
+            </div>
+            <div class="metric">
+              <label>Climb Rate</label>
+              <span id="val-climb">-- m/s</span>
+            </div>
+            <div class="metric">
+              <label>Ground Speed</label>
+              <span id="val-speed">-- km/h</span>
+            </div>
+            <div class="metric">
+              <label>Heading</label>
+              <span id="val-heading">--°</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🌡️ Atmospheric Sensors</h3>
+          <div class="metric-grid">
+            <div class="metric">
+              <label>Temperature</label>
+              <span id="val-temp">-- °C</span>
+            </div>
+            <div class="metric">
+              <label>Rel. Humidity</label>
+              <span id="val-rh">-- %</span>
+            </div>
+            <div class="metric">
+              <label>Battery</label>
+              <span id="val-batt">-- V</span>
+            </div>
+            <div class="metric">
+              <label>Frame #</label>
+              <span id="val-frame">--</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🎯 Landing Estimate</h3>
+          <p class="desc" id="landing-pred">Awaiting descent phase...</p>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
