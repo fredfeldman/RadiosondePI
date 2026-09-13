@@ -13,7 +13,7 @@ A high-performance, native Raspberry Pi Radiosonde Auto-Scanner and Telemetry De
   - **Meteomodem M10 / M20** (9600 baud GFSK)
 - **Wideband Auto-Scanner**: Automatically scans 400.05–406.00 MHz meteorology band, locks onto active sondes, and tracks frequency drift (AFC).
 - **Embedded Web UI**: Real-time Leaflet.js live map, altitude/ascent graphs, and receiver status accessible via web browser.
-- **Direct Cloud Uplinks**: Automatic submission to **SondeHub v2 Tracker**, **APRS-IS**, and local **MQTT**.
+- **Direct Cloud & Aggregator Uplinks**: Automatic submission to **AeroHub** aviation/telemetry aggregator (`RadioSondeImportRecord`), **SondeHub v2 Tracker**, **APRS-IS**, and local **MQTT**.
 
 ---
 

@@ -27,6 +27,12 @@
     "bind_address": "0.0.0.0"
   },
   "uplink": {
+    "aerohub": {
+      "enabled": true,
+      "endpoint_url": "http://localhost:8088/api/v1/telemetry",
+      "api_key": "",
+      "station_id": "RadiosondePI-Station-01"
+    },
     "sondehub": {
       "enabled": false,
       "uploader_position": true

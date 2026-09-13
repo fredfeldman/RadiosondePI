@@ -16,7 +16,7 @@ This guide walks you through setting up, configuring, and operating **Radiosonde
    - [Running Interactively (CLI Mode)](#running-interactively-cli-mode)
    - [Running as a Background `systemd` Service](#running-as-a-background-systemd-service)
 8. [Accessing the Live Web Dashboard & Map](#8-accessing-the-live-web-dashboard--map)
-9. [Setting Up Cloud Uplinks (SondeHub & APRS-IS)](#9-setting-up-cloud-uplinks-sondehub--aprs-is)
+9. [Setting Up Cloud Uplinks & Aggregators (AeroHub, SondeHub & APRS-IS)](#9-setting-up-cloud-uplinks--aggregators-aerohub-sondehub--aprs-is)
 10. [Troubleshooting & FAQs](#10-troubleshooting--faqs)
 
 ---
@@ -155,6 +155,12 @@ Create or edit your runtime configuration file (default location: `/etc/radioson
     "bind_address": "0.0.0.0"
   },
   "uplink": {
+    "aerohub": {
+      "enabled": true,
+      "endpoint_url": "http://localhost:8088/api/v1/telemetry",
+      "api_key": "",
+      "station_id": "RadiosondePI-01"
+    },
     "sondehub": {
       "enabled": true,
       "uploader_position": true
@@ -254,7 +260,13 @@ http://<YOUR_RASPBERRY_PI_IP>:8080
 
 ---
 
-## 9. Setting Up Cloud Uplinks (SondeHub & APRS-IS)
+## 9. Setting Up Cloud Uplinks & Aggregators (AeroHub, SondeHub & APRS-IS)
+
+### AeroHub Aggregator Uplink
+RadiosondePI streams live real-time radiosonde targets, GPS trajectories, and atmospheric sensor telemetry directly to **AeroHub aggregator instances**:
+1. In `config.json`, locate `"uplink" -> "aerohub"`.
+2. Set `"enabled": true`.
+3. Configure `"endpoint_url"` (e.g. `http://<aerohub-host>:8088/api/v1/telemetry` or cloud instance) and provide your `"api_key"` and `"station_id"`.
 
 ### SondeHub v2 Upload
 To contribute telemetry to the global amateur tracking network at [https://sondehub.org](https://sondehub.org):

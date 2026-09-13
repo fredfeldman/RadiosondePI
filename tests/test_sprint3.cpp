@@ -4,6 +4,7 @@
 
 #include "uplink/SondeHubUplink.hpp"
 #include "uplink/AprsGateway.hpp"
+#include "uplink/AeroHubUplink.hpp"
 #include "telemetry/LandingPredictor.hpp"
 #include "web/WebDashboard.hpp"
 
@@ -104,10 +105,48 @@ void testWebDashboardSerialization() {
     std::cout << "[TEST PASSED] Web Dashboard telemetry JSON API." << std::endl;
 }
 
+void testAeroHubPayloadFormatting() {
+    RadiosondePI::Uplink::AeroHubConfig cfg{};
+    cfg.enabled = true;
+    cfg.stationId = "Station-Alpha";
+
+    RadiosondePI::Uplink::AeroHubUplink aerohub(cfg);
+
+    RadiosondePI::Telemetry::TelemetryFrame frame{};
+    frame.type = RadiosondePI::Telemetry::SondeType::RS41;
+    frame.serialNumber = "RS41-S321044";
+    frame.frameNumber = 450;
+    frame.timestamp = std::chrono::system_clock::now();
+    frame.latitude = 52.5200;
+    frame.longitude = 13.4050;
+    frame.altitudeMeters = 22450.0;
+    frame.speedMps = 32.5f;
+    frame.climbRateMps = 6.1f;
+    frame.headingDeg = 115.0f;
+    frame.satellitesVisible = 10;
+    frame.gpsValid = true;
+    frame.temperatureC = -58.4f;
+    frame.relativeHumidityPercent = 4.2f;
+    frame.pressureHpa = 35.8f;
+    frame.batteryVoltageV = 3.02f;
+    frame.snrDb = 14.2f;
+
+    std::string json = aerohub.formatAeroHubRecordJson(frame);
+    assert(json.find("\"serial\": \"RS41-S321044\"") != std::string::npos);
+    assert(json.find("\"sondeType\": \"RS41\"") != std::string::npos);
+    assert(json.find("\"lat\": 52.520000") != std::string::npos);
+    assert(json.find("\"altitudeMeters\": 22450.0") != std::string::npos);
+    assert(json.find("\"sourceApp\": \"RadiosondePI\"") != std::string::npos);
+    assert(json.find("\"sourceFormat\": \"application/x-ndjson; domain=radiosonde\"") != std::string::npos);
+
+    std::cout << "[TEST PASSED] AeroHub telemetry payload formatter (RadioSondeImportRecord contract)." << std::endl;
+}
+
 int main() {
     std::cout << "--- Running Sprint 3 Web UI & Uplink Tests ---" << std::endl;
     testSondeHubPayloadFormatting();
     testAprsFormatting();
+    testAeroHubPayloadFormatting();
     testLandingPredictor();
     testWebDashboardSerialization();
     std::cout << "--- All Sprint 3 Tests Passed ---" << std::endl;
