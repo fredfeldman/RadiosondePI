@@ -58,6 +58,8 @@ RadiosondePI/
 
 ## ⚡ Quick Build Instructions
 
+For complete setup instructions, Debian/Raspberry Pi OS udev rules, service configuration, and troubleshooting, see the [User Installation Guide](UserInstallGuide.md).
+
 ### Prerequisites (Debian / Raspberry Pi OS)
 ```bash
 sudo apt-get update
@@ -66,8 +68,19 @@ sudo apt-get install -y cmake g++ librtlsdr-dev libfftw3-dev libsqlite3-dev libs
 
 ### Build & Run
 ```bash
+git clone https://github.com/fredfeldman/RadiosondePI.git
+cd RadiosondePI
 mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j$(nproc)
 ./radiosondepi --config ../config/config.example.json
 ```
+
+---
+
+## 📚 Documentation
+
+- [User Installation & Setup Guide](UserInstallGuide.md) — Comprehensive guide covering hardware, driver blacklist, configuration, systemd service, and troubleshooting.
+- [System Architecture & Initial Plan](RadioSondePI_Plan.md) — Complete DSP and pipeline architectural design.
+- [Sprint Roadmap & Backlog](SPRINT_PLAN.md) — Completed sprint milestones and acceptance criteria.
+
