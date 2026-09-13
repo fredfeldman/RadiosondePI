@@ -17,7 +17,8 @@ This guide walks you through setting up, configuring, and operating **Radiosonde
    - [Running as a Background `systemd` Service](#running-as-a-background-systemd-service)
 8. [Accessing the Live Web Dashboard & Map](#8-accessing-the-live-web-dashboard--map)
 9. [Setting Up Cloud Uplinks & Aggregators (AeroHub, SondeHub & APRS-IS)](#9-setting-up-cloud-uplinks--aggregators-aerohub-sondehub--aprs-is)
-10. [Troubleshooting & FAQs](#10-troubleshooting--faqs)
+10. [Updating an Existing Installation](#10-updating-an-existing-installation)
+11. [Troubleshooting & FAQs](#11-troubleshooting--faqs)
 
 ---
 
@@ -282,7 +283,49 @@ To beacon balloon positions into the APRS network:
 
 ---
 
-## 10. Troubleshooting & FAQs
+## 10. Updating an Existing Installation
+
+### Option A: Automated Update Script (Recommended)
+From your `RadiosondePI` folder on the Raspberry Pi:
+```bash
+cd ~/RadiosondePI
+chmod +x scripts/update.sh
+./scripts/update.sh
+```
+
+### Option B: Manual Step-by-Step Update
+```bash
+cd ~/RadiosondePI
+
+# 1. Stop background service
+sudo systemctl stop radiosondepi
+
+# 2. Pull latest code
+git pull origin main
+
+# 3. Build updated binaries
+mkdir -p build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+make -j$(nproc)
+
+# 4. Verify tests
+ctest --output-on-failure
+
+# 5. Install updated executable and web dashboard assets
+sudo cp radiosondepi /opt/radiosondepi/bin/
+sudo cp -r ../web/* /opt/radiosondepi/web/
+
+# 6. Restart background service
+sudo systemctl daemon-reload
+sudo systemctl restart radiosondepi
+
+# 7. Check service status
+sudo systemctl status radiosondepi
+```
+
+---
+
+## 11. Troubleshooting & FAQs
 
 ### Q1: `rtlsdr_open() failed` or `No RTL-SDR devices found`
 - **Cause**: Kernel DVB driver was not unloaded or USB permissions are missing.
