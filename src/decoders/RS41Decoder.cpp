@@ -3,6 +3,7 @@
 #include <cstring>
 #include <iostream>
 #include <numbers>
+#include <array>
 
 namespace RadiosondePI::Decoders {
 
@@ -23,7 +24,48 @@ const std::array<uint8_t, 518> RS41Decoder::s_prbsMask = []() {
     return mask;
 }();
 
+// Galois Field GF(2^8) tables for Reed-Solomon (255, 231) decoding
+// Polynomial: x^8 + x^4 + x^3 + x^2 + 1 (0x11D, generator root alpha = 2)
+namespace GF {
+    static uint8_t expTable[512];
+    static uint8_t logTable[256];
+    static bool initialized = false;
+
+    static void initTables() {
+        if (initialized) return;
+        uint16_t x = 1;
+        for (int i = 0; i < 255; ++i) {
+            expTable[i] = static_cast<uint8_t>(x);
+            expTable[i + 255] = static_cast<uint8_t>(x);
+            logTable[x] = static_cast<uint8_t>(i);
+            x <<= 1;
+            if (x & 0x100) {
+                x ^= 0x11D; // Poly 0x11D
+            }
+        }
+        logTable[0] = 0; // undefined, set to 0
+        initialized = true;
+    }
+
+    inline uint8_t mul(uint8_t a, uint8_t b) {
+        if (a == 0 || b == 0) return 0;
+        return expTable[logTable[a] + logTable[b]];
+    }
+
+    inline uint8_t div(uint8_t a, uint8_t b) {
+        if (a == 0) return 0;
+        if (b == 0) return 0; // Error / div by 0
+        return expTable[(logTable[a] - logTable[b] + 255) % 255];
+    }
+
+    inline uint8_t inv(uint8_t a) {
+        if (a == 0) return 0;
+        return expTable[255 - logTable[a]];
+    }
+} // namespace GF
+
 RS41Decoder::RS41Decoder() {
+    GF::initTables();
     reset();
 }
 
@@ -122,9 +164,134 @@ void RS41Decoder::ecefToGeodetic(double x, double y, double z, double& lat, doub
 }
 
 bool RS41Decoder::decodeReedSolomon(uint8_t* block, int& errorsCorrected) {
-    // Simple verification check; standard RS41 includes 24 parity bytes over 255-byte codewords.
-    // In actual production decoding, this performs RS(255, 231) syndrome calculation and Chien search.
+    // RS(255, 231) parameters: N=255, K=231, 2t=24 parity bytes
+    GF::initTables();
     errorsCorrected = 0;
+    constexpr int N = 255;
+    constexpr int NPAR = 24;
+    constexpr int MAXERR = 12;
+
+    // 1. Calculate Syndromes S[0..23] = block(alpha^i)
+    uint8_t S[NPAR]{};
+    bool hasErrors = false;
+
+    for (int i = 0; i < NPAR; ++i) {
+        uint8_t sum = 0;
+        uint8_t alpha_i = GF::expTable[i];
+        for (int j = 0; j < N; ++j) {
+            sum = block[j] ^ GF::mul(sum, alpha_i);
+        }
+        S[i] = sum;
+        if (sum != 0) hasErrors = true;
+    }
+
+    if (!hasErrors) {
+        return true; // No errors in block
+    }
+
+    // 2. Berlekamp-Massey Algorithm for Error Locator Polynomial Lambda
+    std::array<uint8_t, NPAR + 1> lambda{};
+    std::array<uint8_t, NPAR + 1> b{};
+    lambda[0] = 1;
+    b[0] = 1;
+
+    int L = 0;
+    int k = 1;
+    uint8_t gamma = 1;
+
+    for (int r = 0; r < NPAR; ++r) {
+        // Discrepancy delta = S[r] + sum_{i=1}^L lambda[i] * S[r-i]
+        uint8_t delta = S[r];
+        for (int i = 1; i <= L; ++i) {
+            delta ^= GF::mul(lambda[i], S[r - i]);
+        }
+
+        if (delta == 0) {
+            k++;
+        } else {
+            std::array<uint8_t, NPAR + 1> temp = lambda;
+            uint8_t factor = GF::div(delta, gamma);
+
+            for (int i = 0; i + k <= NPAR; ++i) {
+                temp[i + k] ^= GF::mul(factor, b[i]);
+            }
+
+            if (2 * L <= r) {
+                L = r + 1 - L;
+                b = lambda;
+                gamma = delta;
+                k = 1;
+            } else {
+                k++;
+            }
+            lambda = temp;
+        }
+    }
+
+    if (L > MAXERR) {
+        return false; // Too many errors
+    }
+
+    // 3. Chien Search: find roots of Lambda(x)
+    std::vector<int> errorPos;
+    errorPos.reserve(L);
+
+    for (int i = 0; i < N; ++i) {
+        uint8_t alpha_inv = GF::expTable[(255 - i) % 255];
+        uint8_t sum = 1;
+        uint8_t term = 1;
+
+        for (int j = 1; j <= L; ++j) {
+            term = GF::mul(term, alpha_inv);
+            sum ^= GF::mul(lambda[j], term);
+        }
+
+        if (sum == 0) {
+            errorPos.push_back(N - 1 - i);
+        }
+    }
+
+    if (static_cast<int>(errorPos.size()) != L) {
+        return false; // Root count mismatch -> uncorrectable error pattern
+    }
+
+    // 4. Forney Algorithm: compute error magnitudes
+    // Omega(x) = [S(x) * Lambda(x)] mod x^(NPAR)
+    std::array<uint8_t, NPAR> omega{};
+    for (int i = 0; i < NPAR; ++i) {
+        for (int j = 0; j <= i && j <= L; ++j) {
+            omega[i] ^= GF::mul(S[i - j], lambda[j]);
+        }
+    }
+
+    // Apply error corrections
+    for (int pos : errorPos) {
+        int i = N - 1 - pos;
+        uint8_t Xk_inv = GF::expTable[(255 - i) % 255];
+
+        // Omega(Xk_inv)
+        uint8_t num = 0;
+        uint8_t term = 1;
+        for (int j = 0; j < NPAR; ++j) {
+            num ^= GF::mul(omega[j], term);
+            term = GF::mul(term, Xk_inv);
+        }
+
+        // Lambda'(Xk_inv) (formal derivative of Lambda)
+        uint8_t denom = 0;
+        term = 1;
+        for (int j = 1; j <= L; j += 2) {
+            denom ^= GF::mul(lambda[j], term);
+            term = GF::mul(term, GF::mul(Xk_inv, Xk_inv));
+        }
+
+        if (denom == 0) return false;
+
+        uint8_t errorVal = GF::div(num, denom);
+        block[pos] ^= errorVal;
+    }
+
+    errorsCorrected = L;
     return true;
 }
 
@@ -140,6 +307,30 @@ void RS41Decoder::processRawFrame(const uint8_t* frameData, size_t length) {
     Telemetry::TelemetryFrame telemetry{};
     telemetry.type = Telemetry::SondeType::RS41;
     telemetry.timestamp = std::chrono::system_clock::now();
+
+    // Perform Reed-Solomon error correction if full 518 byte frame
+    if (frame.size() >= 518) {
+        // RS41 interleaved codewords
+        uint8_t block1[255]{};
+        uint8_t block2[255]{};
+        for (size_t i = 0; i < 255; ++i) {
+            if (8 + 2 * i < frame.size()) block1[i] = frame[8 + 2 * i];
+            if (9 + 2 * i < frame.size()) block2[i] = frame[9 + 2 * i];
+        }
+
+        int err1 = 0, err2 = 0;
+        bool ok1 = decodeReedSolomon(block1, err1);
+        bool ok2 = decodeReedSolomon(block2, err2);
+
+        if (ok1 && ok2) {
+            for (size_t i = 0; i < 255; ++i) {
+                if (8 + 2 * i < frame.size()) frame[8 + 2 * i] = block1[i];
+                if (9 + 2 * i < frame.size()) frame[9 + 2 * i] = block2[i];
+            }
+            telemetry.eccCorrected = (err1 > 0 || err2 > 0);
+            telemetry.eccErrorsCorrected = static_cast<uint16_t>(err1 + err2);
+        }
+    }
 
     // Iterate through TLV (Type-Length-Value) sub-blocks
     size_t offset = 8;

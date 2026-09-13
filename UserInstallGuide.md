@@ -46,7 +46,7 @@ This guide walks you through setting up, configuring, and operating **Radiosonde
 Run the automated setup script to install dependencies, blacklist interfering kernel DVB drivers, build the binaries, and register the system service:
 
 ```bash
-git clone https://github.com/fredfeldman/RadiosondePI.git
+git clone https://github.com/fredfeldman/RadiosondePI.gitip
 cd RadiosondePI
 chmod +x scripts/install.sh
 ./scripts/install.sh

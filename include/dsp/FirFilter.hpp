@@ -62,22 +62,53 @@ public:
         return output;
     }
 
+    /**
+     * @brief Optimized decimation FIR filter.
+     * Computes the FIR convolution ONLY on every N-th (decimationFactor) sample,
+     * avoiding redundant dot-product calculations on skipped samples.
+     */
     void processBlockDecimate(const Complex32* input, size_t inputLength, size_t decimationFactor, std::vector<Complex32>& output) {
+        if (inputLength == 0 || decimationFactor == 0) return;
+
         output.clear();
-        output.reserve(inputLength / decimationFactor);
+        output.reserve((inputLength + decimationFactor - 1) / decimationFactor);
+
+        size_t size = m_taps.size();
 
         for (size_t i = 0; i < inputLength; ++i) {
-            Complex32 filtered = processSample(input[i]);
-            if (i % decimationFactor == 0) {
-                output.push_back(filtered);
+            m_history[m_historyIndex] = input[i];
+
+            if (m_decimationPhase == 0) {
+                // Compute FIR dot product only at decimation output intervals
+                Complex32 acc(0.0f, 0.0f);
+                size_t idx = m_historyIndex;
+                for (size_t k = 0; k < size; ++k) {
+                    acc += m_history[idx] * m_taps[k];
+                    if (idx == 0) {
+                        idx = size - 1;
+                    } else {
+                        --idx;
+                    }
+                }
+                output.push_back(acc);
             }
+
+            m_historyIndex = (m_historyIndex + 1) % size;
+            m_decimationPhase = (m_decimationPhase + 1) % decimationFactor;
         }
+    }
+
+    void reset() {
+        std::fill(m_history.begin(), m_history.end(), Complex32(0.0f, 0.0f));
+        m_historyIndex = 0;
+        m_decimationPhase = 0;
     }
 
 private:
     std::vector<float> m_taps;
     std::vector<Complex32> m_history;
     size_t m_historyIndex{0};
+    size_t m_decimationPhase{0};
 };
 
 } // namespace RadiosondePI::DSP

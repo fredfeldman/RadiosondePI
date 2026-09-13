@@ -46,6 +46,10 @@ target_link_libraries(radiosondepi PRIVATE
     Threads::Threads
 )
 
+if(WIN32)
+    target_link_libraries(radiosondepi PRIVATE ws2_32)
+endif()
+
 # Sprint 1 Unit Tests
 add_executable(test_sprint1
     tests/test_sprint1.cpp
@@ -58,6 +62,10 @@ target_link_libraries(test_sprint1 PRIVATE
     ${FFTW3_LIBRARIES}
     Threads::Threads
 )
+
+if(WIN32)
+    target_link_libraries(test_sprint1 PRIVATE ws2_32)
+endif()
 
 # Sprint 2 Unit Tests
 add_executable(test_sprint2
@@ -79,6 +87,10 @@ add_executable(test_sprint3
 target_link_libraries(test_sprint3 PRIVATE
     Threads::Threads
 )
+
+if(WIN32)
+    target_link_libraries(test_sprint3 PRIVATE ws2_32)
+endif()
 
 # Sprint 4 Unit Tests
 add_executable(test_sprint4

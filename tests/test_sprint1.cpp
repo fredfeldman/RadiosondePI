@@ -48,11 +48,32 @@ void testFmDiscriminator() {
     std::cout << "[TEST PASSED] FM Discriminator zero-frequency response." << std::endl;
 }
 
+void testReedSolomonFec() {
+    uint8_t block[255]{};
+    // Initialize clean block with dummy message and computed parity/zeros
+    int errorsCorrected = 0;
+    bool ok = RadiosondePI::Decoders::RS41Decoder::decodeReedSolomon(block, errorsCorrected);
+    assert(ok);
+    assert(errorsCorrected == 0);
+
+    // Corrupt 2 bytes
+    block[10] ^= 0x55;
+    block[50] ^= 0xAA;
+    ok = RadiosondePI::Decoders::RS41Decoder::decodeReedSolomon(block, errorsCorrected);
+    assert(ok);
+    assert(errorsCorrected == 2);
+    assert(block[10] == 0x00);
+    assert(block[50] == 0x00);
+
+    std::cout << "[TEST PASSED] Reed-Solomon (255, 231) Berlekamp-Massey & Chien search." << std::endl;
+}
+
 int main() {
     std::cout << "--- Running Sprint 1 DSP & Decoder Tests ---" << std::endl;
     testRingBuffer();
     testEcefConversion();
     testFmDiscriminator();
+    testReedSolomonFec();
     std::cout << "--- All Sprint 1 Tests Passed ---" << std::endl;
     return 0;
 }
