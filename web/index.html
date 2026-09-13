@@ -20,6 +20,10 @@
         <span id="sonde-title">No Active Sonde Locked</span>
         <span class="freq" id="sonde-freq">---.--- MHz</span>
       </div>
+      <div class="tuner-bar">
+        <input type="number" id="tune-input" step="0.01" min="400.0" max="406.0" value="404.8" placeholder="MHz" />
+        <button id="btn-tune" onclick="tuneFrequency()">Tune</button>
+      </div>
     </header>
 
     <div class="main-layout">

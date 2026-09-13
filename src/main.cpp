@@ -26,6 +26,7 @@
 #include "uplink/SondeHubUplink.hpp"
 #include "uplink/AprsGateway.hpp"
 #include "web/WebDashboard.hpp"
+#include "config/Config.hpp"
 
 static std::atomic<bool> g_keepRunning{true};
 
@@ -42,58 +43,81 @@ int main(int argc, char* argv[]) {
     std::cout << " Multi-Protocol Receiver & Live AeroHub Pipeline  " << std::endl;
     std::cout << "=================================================" << std::endl;
 
-    uint32_t frequencyHz = 403000000;
     std::string configPath = "config/config.example.json";
-    bool autoScan = false;
-    bool diversityMode = false;
-    uint16_t webPort = 8080;
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if ((arg == "--config" || arg == "-c") && i + 1 < argc) {
+            configPath = argv[++i];
+        }
+    }
+
+    RadiosondePI::Config::AppConfig appConfig;
+    if (appConfig.loadFromFile(configPath)) {
+        std::cout << "[CONFIG] Loaded configuration from: " << configPath << std::endl;
+    } else if (appConfig.loadFromFile("/etc/radiosondepi/config.json")) {
+        std::cout << "[CONFIG] Loaded configuration from /etc/radiosondepi/config.json" << std::endl;
+    } else {
+        std::cout << "[CONFIG] Using default configuration parameters." << std::endl;
+    }
+
+    // CLI overrides
+    uint32_t frequencyHz = (appConfig.sdr.frequencyHz > 0) ? appConfig.sdr.frequencyHz : 403000000;
+    bool autoScan = appConfig.scannerEnabled;
+    bool diversityMode = appConfig.diversityEnabled;
+    uint16_t webPort = (appConfig.web.port > 0) ? appConfig.web.port : 8080;
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if ((arg == "--freq" || arg == "-f") && i + 1 < argc) {
-            frequencyHz = static_cast<uint32_t>(std::stoul(argv[++i]));
-        } else if ((arg == "--config" || arg == "-c") && i + 1 < argc) {
-            configPath = argv[++i];
+            double f = std::stod(argv[++i]);
+            frequencyHz = (f < 1000.0) ? static_cast<uint32_t>(f * 1e6) : static_cast<uint32_t>(f);
+            autoScan = false; // Explicit frequency overrides auto-scan
         } else if (arg == "--scan" || arg == "-s") {
             autoScan = true;
         } else if (arg == "--diversity" || arg == "-d") {
             diversityMode = true;
         } else if ((arg == "--port" || arg == "-p") && i + 1 < argc) {
             webPort = static_cast<uint16_t>(std::stoi(argv[++i]));
+        } else if ((arg == "--gain" || arg == "-g") && i + 1 < argc) {
+            std::string gStr = argv[++i];
+            appConfig.sdr.gain = (gStr == "auto") ? 0 : static_cast<int>(std::stof(gStr) * 10.0f);
         }
     }
 
-    std::cout << "[CONFIG] Target Frequency: " << std::fixed << std::setprecision(3) 
-              << (frequencyHz / 1e6) << " MHz" << std::endl;
+    std::cout << "[CONFIG] Tuned Frequency: " << std::fixed << std::setprecision(3) 
+              << (frequencyHz / 1e6) << " MHz" 
+              << " | AutoScan: " << (autoScan ? "ENABLED" : "DISABLED")
+              << " | Gain: " << (appConfig.sdr.gain == 0 ? "AUTO" : std::to_string(appConfig.sdr.gain / 10.0f) + " dB")
+              << std::endl;
 
     // 1. Initialize Uplinks & Storage
     RadiosondePI::Storage::FlightLogger flightLogger;
     RadiosondePI::Telemetry::LandingPredictor landingPredictor;
 
-    RadiosondePI::Uplink::AeroHubConfig aeroHubConfig{};
-    aeroHubConfig.enabled = true;
-    aeroHubConfig.stationId = "RadiosondePI-01";
-    RadiosondePI::Uplink::AeroHubUplink aeroHubUplink(aeroHubConfig);
-
-    RadiosondePI::Uplink::StationConfig stationConfig{};
-    stationConfig.callsign = "N0CALL";
-    RadiosondePI::Uplink::SondeHubUplink sondeHubUplink(stationConfig);
-    RadiosondePI::Uplink::AprsGateway aprsGateway("N0CALL-11");
+    RadiosondePI::Uplink::AeroHubUplink aeroHubUplink(appConfig.aeroHub);
+    RadiosondePI::Uplink::SondeHubUplink sondeHubUplink(appConfig.station);
+    RadiosondePI::Uplink::AprsGateway aprsGateway(appConfig.station.callsign + "-11");
 
     // 2. Initialize Embedded Web Dashboard
-    RadiosondePI::Web::WebServerConfig webConfig{};
-    webConfig.port = webPort;
-    webConfig.bindAddress = "0.0.0.0";
-    webConfig.webRoot = "web";
-
-    RadiosondePI::Web::WebDashboard webDashboard(webConfig);
+    appConfig.web.port = webPort;
+    RadiosondePI::Web::WebDashboard webDashboard(appConfig.web);
+    webDashboard.setCurrentFrequency(frequencyHz);
     webDashboard.start();
 
     // 3. Unified Telemetry Dispatcher Callback
+    std::atomic<bool> sondeLocked{false};
+    std::atomic<uint64_t> lastFrameTimeMs{0};
+
     auto onTelemetryReceived = [&](const RadiosondePI::Telemetry::TelemetryFrame& frame) {
+        sondeLocked = true;
+        auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch()
+        ).count();
+        lastFrameTimeMs = nowMs;
+
         // Console Output
         std::cout << "\n>>> [" << RadiosondePI::Telemetry::sondeTypeToString(frame.type) 
-                  << " DETECTED] Frame #" << frame.frameNumber 
+                  << " LOCKED @ " << std::fixed << std::setprecision(3) << (frequencyHz / 1e6) << " MHz] Frame #" << frame.frameNumber 
                   << " | Serial: " << frame.serialNumber << " <<<\n";
         if (frame.gpsValid) {
             std::cout << "    Position: " << std::fixed << std::setprecision(5)
@@ -124,9 +148,8 @@ int main(int argc, char* argv[]) {
         flightLogger.logFrame(frame);
 
         // AeroHub Aggregator JSON event
-        if (aeroHubConfig.enabled) {
+        if (appConfig.aeroHub.enabled) {
             std::string aeroRecord = aeroHubUplink.formatAeroHubRecordJson(frame);
-            // In live mode, transmitted via HTTP POST or socket to AeroHub instance
         }
     };
 
@@ -164,27 +187,24 @@ int main(int argc, char* argv[]) {
     syncM10.init(channelSampleRate, 9600.0f, 0.05f);
     syncM10.setBitCallback([&](uint8_t bit) { m10Decoder.processBit(bit); });
 
-    RadiosondePI::Scanner::ScannerConfig scannerConfig{};
-    RadiosondePI::Scanner::SpectrumScanner spectrumScanner(scannerConfig);
+    RadiosondePI::Scanner::SpectrumScanner spectrumScanner(appConfig.scanner);
 
     // 6. Initialize RTL-SDR Device / Diversity Receiver
     RadiosondePI::SDR::DiversityConfig divConfig{};
     divConfig.enabled = diversityMode;
-    divConfig.mode = RadiosondePI::DSP::DiversityMode::MaximalRatioCombining;
+    divConfig.mode = appConfig.diversityMode;
 
-    RadiosondePI::SDR::SdrConfig dev0{};
+    RadiosondePI::SDR::SdrConfig dev0 = appConfig.sdr;
     dev0.deviceIndex = 0;
     dev0.frequencyHz = frequencyHz;
     dev0.sampleRate = static_cast<uint32_t>(inputSampleRate);
-    dev0.gain = 0;
     divConfig.dongleConfigs.push_back(dev0);
 
     if (diversityMode) {
-        RadiosondePI::SDR::SdrConfig dev1{};
-        dev1.deviceIndex = 1;
+        RadiosondePI::SDR::SdrConfig dev1 = appConfig.sdr;
+        dev1.deviceIndex = appConfig.diversitySecondaryIndex;
         dev1.frequencyHz = frequencyHz;
         dev1.sampleRate = static_cast<uint32_t>(inputSampleRate);
-        dev1.gain = 0;
         divConfig.dongleConfigs.push_back(dev1);
         std::cout << "[SDR] Dual-dongle diversity receiver enabled (Maximal Ratio Combining)." << std::endl;
     }
@@ -195,6 +215,39 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    // Hook web dashboard tuning callback to re-tune hardware on the fly
+    std::mutex freqMutex;
+    webDashboard.setTuneCallback([&](uint32_t newFreqHz) {
+        std::lock_guard<std::mutex> lock(freqMutex);
+        frequencyHz = newFreqHz;
+        sdrReceiver.setFrequency(newFreqHz);
+        channelFilter.reset();
+        afc.reset();
+        rs41Decoder.reset();
+        dfmDecoder.reset();
+        m10Decoder.reset();
+        std::cout << "[SDR] Retuned to: " << std::fixed << std::setprecision(3) << (newFreqHz / 1e6) << " MHz" << std::endl;
+    });
+
+    // Peak detection auto-tune callback
+    spectrumScanner.setPeakCallback([&](const RadiosondePI::Scanner::PeakResult& peak) {
+        if (autoScan && !sondeLocked) {
+            std::lock_guard<std::mutex> lock(freqMutex);
+            if (peak.frequencyHz != frequencyHz && std::abs(static_cast<int>(peak.frequencyHz - frequencyHz)) > 10000) {
+                std::cout << "[SCANNER] Strong signal peak detected at " << std::fixed << std::setprecision(3) 
+                          << (peak.frequencyHz / 1e6) << " MHz (SNR: " << std::setprecision(1) << peak.snrDb << " dB). Locking..." << std::endl;
+                frequencyHz = peak.frequencyHz;
+                sdrReceiver.setFrequency(peak.frequencyHz);
+                webDashboard.setCurrentFrequency(peak.frequencyHz);
+                channelFilter.reset();
+                afc.reset();
+                rs41Decoder.reset();
+                dfmDecoder.reset();
+                m10Decoder.reset();
+            }
+        }
+    });
+
     // Zero-allocation pre-allocated DSP processing buffers
     constexpr size_t maxDecimatedBufferSize = 65536;
     std::vector<RadiosondePI::DSP::Complex32> decimatedBuffer(maxDecimatedBufferSize);
@@ -203,8 +256,8 @@ int main(int argc, char* argv[]) {
 
     // Start SDR async ingestion with zero heap allocations per block
     sdrReceiver.start([&](const RadiosondePI::DSP::Complex32* samples, size_t count) {
-        // Optional Wideband Spectrum Scanner Hook
-        if (autoScan) {
+        // Wideband Spectrum Scanner Hook
+        if (autoScan && !sondeLocked) {
             spectrumScanner.analyzeBlock(samples, count, frequencyHz, inputSampleRate);
         }
 
@@ -228,10 +281,49 @@ int main(int argc, char* argv[]) {
         syncM10.processBlock(demodulatedAudioBuffer.data(), decimatedCount);
     });
 
-    std::cout << "[DSP] Zero-allocation multi-protocol pipeline running. Press Ctrl+C to terminate." << std::endl;
+    std::cout << "[DSP] Receiver pipeline running. Press Ctrl+C to terminate." << std::endl;
+
+    // Background frequency sweeping thread for auto-scan mode when unlocked
+    std::thread scanSweepThread([&]() {
+        // Step frequencies across meteorological band: 400.5, 402.3, 404.1, 405.5 MHz
+        const uint32_t sweepSteps[] = { 401000000, 402800000, 404800000, 405500000 };
+        size_t stepIdx = 0;
+
+        while (g_keepRunning) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            if (!autoScan) continue;
+
+            auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::system_clock::now().time_since_epoch()
+            ).count();
+
+            // Unlock if no frames received for > 8 seconds
+            if (sondeLocked && (nowMs - lastFrameTimeMs > 8000)) {
+                std::cout << "[SCANNER] Signal lost or burst detected. Resuming wideband auto-scan..." << std::endl;
+                sondeLocked = false;
+            }
+
+            if (!sondeLocked) {
+                // Hop to next sweep step
+                uint32_t nextFreq = sweepSteps[stepIdx % (sizeof(sweepSteps)/sizeof(sweepSteps[0]))];
+                stepIdx++;
+
+                std::lock_guard<std::mutex> lock(freqMutex);
+                frequencyHz = nextFreq;
+                sdrReceiver.setFrequency(nextFreq);
+                webDashboard.setCurrentFrequency(nextFreq);
+                channelFilter.reset();
+                afc.reset();
+            }
+        }
+    });
 
     while (g_keepRunning) {
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    }
+
+    if (scanSweepThread.joinable()) {
+        scanSweepThread.join();
     }
 
     std::cout << "\n[SHUTDOWN] Stopping SDR acquisition..." << std::endl;

@@ -47,6 +47,8 @@ struct WebServerConfig {
 
 class WebDashboard {
 public:
+    using TuneCallback = std::function<void(uint32_t freqHz)>;
+
     explicit WebDashboard(const WebServerConfig& config = WebServerConfig{})
         : m_config(config) {}
 
@@ -54,11 +56,24 @@ public:
         stop();
     }
 
+    void setTuneCallback(TuneCallback cb) {
+        m_tuneCallback = std::move(cb);
+    }
+
+    void setCurrentFrequency(uint32_t freqHz) {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_currentFreqHz = freqHz;
+        m_latestFrame.frequencyHz = freqHz;
+    }
+
     void updateTelemetry(const Telemetry::TelemetryFrame& frame) {
         std::string jsonPayload;
         {
             std::lock_guard<std::mutex> lock(m_mutex);
             m_latestFrame = frame;
+            if (m_latestFrame.frequencyHz == 0) {
+                m_latestFrame.frequencyHz = m_currentFreqHz;
+            }
             m_history.push_back(frame);
             if (m_history.size() > 500) {
                 m_history.erase(m_history.begin());
@@ -353,6 +368,36 @@ private:
             sendResponse(clientSock, 200, "OK", "application/json", getLatestTelemetryJson());
         } else if (path == "/api/flightpath") {
             sendResponse(clientSock, 200, "OK", "application/json", getFlightPathJson());
+        } else if (path.rfind("/api/tune", 0) == 0) {
+            // Handle /api/tune?freq=404800000 or /api/tune?freq=404.8
+            size_t freqPos = path.find("freq=");
+            if (freqPos != std::string::npos) {
+                std::string valStr = path.substr(freqPos + 5);
+                size_t ampPos = valStr.find('&');
+                if (ampPos != std::string::npos) valStr = valStr.substr(0, ampPos);
+
+                try {
+                    double val = std::stod(valStr);
+                    uint32_t freqHz = 0;
+                    if (val < 1000.0) {
+                        freqHz = static_cast<uint32_t>(val * 1e6); // e.g. 404.8 -> 404800000
+                    } else {
+                        freqHz = static_cast<uint32_t>(val);
+                    }
+
+                    setCurrentFrequency(freqHz);
+                    if (m_tuneCallback) {
+                        m_tuneCallback(freqHz);
+                    }
+
+                    std::string okJson = "{\"status\":\"ok\",\"frequency_hz\":" + std::to_string(freqHz) + "}";
+                    sendResponse(clientSock, 200, "OK", "application/json", okJson);
+                } catch (...) {
+                    sendResponse(clientSock, 400, "Bad Request", "application/json", "{\"error\":\"invalid frequency\"}");
+                }
+            } else {
+                sendResponse(clientSock, 400, "Bad Request", "application/json", "{\"error\":\"missing freq parameter\"}");
+            }
         } else {
             // Static file serving
             if (path == "/" || path.empty()) {
@@ -398,6 +443,8 @@ private:
 
     WebServerConfig m_config;
     mutable std::mutex m_mutex;
+    uint32_t m_currentFreqHz{403000000};
+    TuneCallback m_tuneCallback;
     Telemetry::TelemetryFrame m_latestFrame;
     std::vector<Telemetry::TelemetryFrame> m_history;
 

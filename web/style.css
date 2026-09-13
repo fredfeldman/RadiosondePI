@@ -74,6 +74,37 @@ header {
   font-weight: 600;
 }
 
+.tuner-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tuner-bar input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  width: 90px;
+}
+
+.tuner-bar button {
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  padding: 5px 12px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tuner-bar button:hover {
+  background: #3b82f6;
+}
+
 .main-layout {
   display: flex;
   flex: 1;

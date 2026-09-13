@@ -82,6 +82,16 @@ public:
         }
     }
 
+    bool setFrequency(uint32_t frequencyHz) {
+        bool success = true;
+        for (auto& dev : m_devices) {
+            if (!dev->setFrequency(frequencyHz)) {
+                success = false;
+            }
+        }
+        return success;
+    }
+
     [[nodiscard]] size_t getActiveChannelCount() const {
         return m_devices.size();
     }

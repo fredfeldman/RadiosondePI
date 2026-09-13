@@ -102,6 +102,20 @@ function initWebSocket() {
   }
 }
 
+async function tuneFrequency() {
+  const val = document.getElementById('tune-input').value;
+  if (!val) return;
+  try {
+    const res = await fetch(`/api/tune?freq=${encodeURIComponent(val)}`);
+    const data = await res.json();
+    if (data.status === 'ok') {
+      document.getElementById('sonde-freq').innerText = `${(data.frequency_hz / 1e6).toFixed(3)} MHz`;
+    }
+  } catch (err) {
+    console.error('Error tuning frequency:', err);
+  }
+}
+
 // Start WebSocket connection with HTTP polling fallback
 initWebSocket();
 setInterval(fetchTelemetryHttp, 1500);
